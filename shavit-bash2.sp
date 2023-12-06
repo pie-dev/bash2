@@ -305,11 +305,9 @@ Handle g_fwdOnClientBanned;
 
 ConVar g_hBanLength;
 char   g_sBanLength[32];
-ConVar g_hAntiNull;
-ConVar g_hPrintNullLogs;
 ConVar g_hAutoban;
 bool g_bAdminMode[MAXPLAYERS + 1];
-ConVar g_hQueryRate;
+//ConVar g_hQueryRate;
 ConVar g_hPersistentData;
 
 char g_aclogfile[PLATFORM_MAX_PATH];
@@ -338,9 +336,6 @@ public void OnPluginStart()
 	g_hBanLength = CreateConVar("bash_banlength", "0", "Ban length for the automated bans", _, true, 0.0);
 	g_hAutoban = CreateConVar("bash_autoban", "1", "Auto ban players who are detected", _, true, 0.0, true, 1.0);
 	HookConVarChange(g_hBanLength, OnBanLengthChanged);
-	g_hAntiNull = CreateConVar("bash_antinull", "0", "Punish for null movement stats", _, true, 0.0, true, 1.0);
-	g_hPrintNullLogs = CreateConVar("bash_print_null_logs", "0", "Should null logs be print to chat?", _, true, 0.0, true, 1.0);
-	g_hQueryRate = CreateConVar("bash_query_rate", "0.2", "How often will convars be queried from the client?", _, true, 0.1, true, 2.0);
 	g_hPersistentData = CreateConVar("bash_persistent_data", "1", "Whether to save and reload strafe stats on a map for players when they disconnect.\nThis is useful to prevent people from frequently rejoining to wipe their strafe stats.", _, true, 0.0, true, 1.0);
 	AutoExecConfig(true, "bash", "sourcemod");
 
@@ -566,11 +561,6 @@ stock void AnticheatLog(int client, const char[] log, any ...)
 
 	LogToFile(g_aclogfile, "%L<%s> %s", client, g_sPlayerIp[client], buffer);
 
-	if (!g_hPrintNullLogs.BoolValue && StrContains(buffer, "nullPct") != -1)
-	{
-		return;
-	}
-
 	PrintToAdmins("%N %s", client, buffer);
 }
 
@@ -663,7 +653,7 @@ public void OnMapStart()
 	delete g_aPersistentData;
 	g_aPersistentData = new ArrayList(sizeof(fuck_sourcemod));
 
-	CreateTimer(g_hQueryRate.FloatValue, Timer_UpdateYaw, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
+	CreateTimer(1.0, Timer_QueryCvars, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
 
 	if(g_bLateLoad)
 	{
@@ -680,7 +670,7 @@ public void OnMapStart()
 	SaveOldLogs();
 }
 
-public Action Timer_UpdateYaw(Handle timer, any data)
+public Action Timer_QueryCvars(Handle timer, any data)
 {
 	for(int iclient = 1; iclient <= MaxClients; iclient++)
 	{
@@ -2615,87 +2605,6 @@ stock void RecordKeySwitch(int client, int button, int oppositeButton, int btype
 	g_iKeySwitch_CurrentFrame[client][btype]                                = (g_iKeySwitch_CurrentFrame[client][btype] + 1) % MAX_FRAMES_KEYSWITCH;
 	g_iLastPressTick_Recorded_KS[client][button][btype]                     = g_iLastPressTick[client][button][btype];
 	g_iLastReleaseTick_Recorded_KS[client][oppositeButton][btype]           = g_iLastReleaseTick[client][oppositeButton][btype];
-
-	// After we have a new set of data, check to see if they are cheating
-	if(g_iKeySwitch_CurrentFrame[client][btype] == 0)
-	{
-		int array[MAX_FRAMES_KEYSWITCH];
-		int size, positiveCount, timingCount, nullCount;
-		for(int idx; idx < MAX_FRAMES_KEYSWITCH; idx++)
-		{
-			if(g_bKeySwitch_IsRecorded[client][btype][idx] == true)
-			{
-				array[idx] = g_iKeySwitch_Stats[client][KeySwitchData_Difference][btype][idx];
-				size++;
-
-				if(btype == BT_Key)
-				{
-					if(g_iKeySwitch_Stats[client][KeySwitchData_Difference][BT_Key][idx] >= 0)
-					{
-						positiveCount++;
-					}
-				}
-
-				if(g_iKeySwitch_Stats[client][KeySwitchData_Difference][BT_Key][idx] == 0)
-				{
-					nullCount++;
-				}
-
-				if(g_iKeySwitch_Stats[client][KeySwitchData_IsTiming][btype][idx] == true)
-				{
-					timingCount++;
-				}
-			}
-		}
-
-		float mean = GetAverage(array, size);
-		float sd   = StandardDeviation(array, size, mean);
-		float nullPct = float(nullCount) / float(MAX_FRAMES_KEYSWITCH);
-		if(sd <= 0.25 || nullPct >= 0.95)
-		{
-			if(btype == BT_Key)
-			{
-				if(positiveCount == MAX_FRAMES_KEYSWITCH)
-				{
-					//PrintToAdmins("%N key switch positive count every frame", client);
-				}
-			}
-
-			float timingPct, positivePct;
-			positivePct = float(positiveCount) / float(MAX_FRAMES_KEYSWITCH);
-			timingPct   = float(timingCount) / float(MAX_FRAMES_KEYSWITCH);
-
-
-			#if defined TIMER
-			char sStyle[32];
-			int style = Shavit_GetBhopStyle(client);
-			Shavit_GetStyleStrings(style, sStyleName, g_sStyleStrings[style].sStyleName, sizeof(stylestrings_t::sStyleName));
-			FormatEx(sStyle, sizeof(sStyle), "%s", g_sStyleStrings[style].sStyleName)
-			AnticheatLog(client, "key switch %d, avg: %.2f, dev: %.2f, p: %.2f％, nullPct: %.2f, Timing: %.1f, Style: %s", btype, mean, sd, positivePct * 100, nullPct * 100, timingPct * 100, sStyle);
-			#endif
-
-			//AnticheatLog(client, "key switch %d, avg: %.2f, dev: %.2f, p: %.2f％, nullPct: %.2f, Timing: %.1f%%", btype, mean, sd, positivePct * 100, nullPct * 100, timingPct * 100);
-			#if !defined TIMER
-			AnticheatLog(client, "key switch %d, avg: %.2f, dev: %.2f, p: %.2f％, nullPct: %.2f, Timing: %.1f", btype, mean, sd, positivePct * 100, nullPct * 100, timingPct * 100);
-			#endif
-			if(IsClientInGame(client) && g_hAntiNull.BoolValue)
-			{
-				// Add a delay to the kick in case they are using an obvious strafehack that would ban them anyway
-				CreateTimer(10.0, Timer_NullKick, GetClientUserId(client));
-			}
-		}
-	}
-}
-
-public Action Timer_NullKick(Handle timer, int userid)
-{
-	int client = GetClientOfUserId(userid);
-
-	if(client != 1)
-	{
-		KickClient(client, "Kicked for potentional movement config");
-	}
-	return Plugin_Continue;
 }
 
 // If a player triggers this while they are turning and their turning rate is legal from the CheckForIllegalTurning function, then we can probably autoban
