@@ -16,7 +16,7 @@
 #pragma newdecls required
 
 #define BAN_LENGTH "0"
-#define IDENTICAL_STRAFE_MIN 20
+#define IDENTICAL_STRAFE_MIN 50
 
 public Plugin myinfo =
 {
@@ -350,9 +350,12 @@ public void OnPluginStart()
 	//HookUserMessage(umVGUIMenu, OnVGUIMenu, true);
 
 	g_Engine = GetEngineVersion();
-	RegAdminCmd("bash2_stats", Bash_Stats, ADMFLAG_RCON, "Check a player's strafe stats");
-	RegAdminCmd("bash2_admin", Bash_AdminMode, ADMFLAG_RCON, "Opt in/out of admin mode (Prints bash info into chat).");
-	RegAdminCmd("bash2_test", Bash_Test, ADMFLAG_RCON, "trigger a test message so you can know if webhooks are working :)");
+	//RegAdminCmd("bash2_stats", Bash_Stats, ADMFLAG_RCON, "Check a player's strafe stats");
+	//RegAdminCmd("bash2_admin", Bash_AdminMode, ADMFLAG_RCON, "Opt in/out of admin mode (Prints bash info into chat).");
+	//RegAdminCmd("bash2_test", Bash_Test, ADMFLAG_RCON, "trigger a test message so you can know if webhooks are working :)");
+
+	RegConsoleCmd("bash2_stats", Bash_Stats, "Check a player's strafe stats");
+	RegConsoleCmd("bash2_admin", Bash_AdminMode, "Opt in/out of admin mode (Prints bash info into chat).");
 
 	HookEvent("player_jump", Event_PlayerJump);
 
@@ -428,11 +431,11 @@ stock void PrintToAdmins(const char[] msg, any...)
 
 	for (int i = 1; i <= MaxClients; i++)
 	{
-		if (CheckCommandAccess(i, "bash2_chat_log", ADMFLAG_RCON))
-		{
-			if(g_bAdminMode[i]) {
-				PrintToChat(i, buffer);
-			}
+		if(!IsValidClient(i)) {
+			continue;
+		}
+		if(g_bAdminMode[i]) {
+			PrintToChat(i, buffer);
 		}
 	}
 }
@@ -551,7 +554,7 @@ void SaveOldLogs()
 	DeleteFile(sPath);
 }
 
-stock bool AnticheatLog(int client, const char[] log, any ...)
+stock void AnticheatLog(int client, const char[] log, any ...)
 {
 	char buffer[1024];
 	VFormat(buffer, sizeof(buffer), log, 3);
@@ -589,9 +592,15 @@ public Action Event_PlayerJump(Event event, const char[] name, bool dontBroadcas
 
 		if(g_strafeTick[iclient] > 300)
 		{
-			if(gainPct > 85.0 && yawPct < 60.0)
+			if(gainPct > 85.0)
 			{
-				AnticheatLog(iclient, "has %.2f％ gains (Yawing %.1f％, Timing: %.1f％, SPJ: %.1f)", gainPct, yawPct, timingPct, spj);
+				char sStyle[32];
+				#if defined TIMER
+				int style = Shavit_GetBhopStyle(iclient);
+				Shavit_GetStyleStrings(style, sStyleName, g_sStyleStrings[style].sStyleName, sizeof(stylestrings_t::sStyleName));
+				FormatEx(sStyle, sizeof(sStyle), "%s", g_sStyleStrings[style].sStyleName)
+				#endif
+				AnticheatLog(iclient, "has %.2f％ gains (Yawing %.1f％, Timing: %.1f％, SPJ: %.1f, Style: %s)", gainPct, yawPct, timingPct, spj, sStyle);
 
 				if(gainPct == 100.0 && timingPct == 100.0)
 				{
@@ -608,6 +617,7 @@ public Action Event_PlayerJump(Event event, const char[] name, bool dontBroadcas
 		g_iStrafesDone[iclient] = 0;
 		g_bFirstSixJumps[iclient] = false;
 	}
+	return Plugin_Continue;
 }
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
@@ -628,6 +638,7 @@ public Action OnVGUIMenu(UserMsg msg_id, Protobuf msg, const int[] players, int 
 		GetClientEyeAngles(iclient, g_MOTDTestAngles[iclient]);
 		CreateTimer(0.1, Timer_MOTD, GetClientUserId(iclient));
 	}
+	return Plugin_Continue;
 }
 
 public Action Timer_MOTD(Handle timer, any data)
@@ -644,6 +655,7 @@ public Action Timer_MOTD(Handle timer, any data)
 		}
 		g_bMOTDTest[iclient] = false;
 	}
+	return Plugin_Continue;
 }
 
 public void OnMapStart()
@@ -672,11 +684,12 @@ public Action Timer_UpdateYaw(Handle timer, any data)
 {
 	for(int iclient = 1; iclient <= MaxClients; iclient++)
 	{
-		if(IsClientInGame(iclient) && !IsFakeClient(iclient))
+		if(IsValidClient(iclient))
 		{
 			QueryForCvars(iclient);
 		}
 	}
+	return Plugin_Continue;
 }
 
 public void OnClientConnected(int client)
@@ -1046,6 +1059,9 @@ public Action Hook_GroundFlags(int entity, const char[] PropName, int &iValue, i
 
 void QueryForCvars(int client)
 {
+	if(IsFakeClient(client) || !IsClientInGame(client)) {
+		return;
+	}
 	if(g_Engine == Engine_CSS) QueryClientConVar(client, "cl_yawspeed", OnYawSpeedRetrieved);
 	QueryClientConVar(client, "m_yaw", OnYawRetrieved);
 	QueryClientConVar(client, "m_filter", OnFilterRetrieved);
@@ -1082,7 +1098,6 @@ public void OnYawRetrieved(QueryCookie cookie, int client, ConVarQueryResult res
 		if(g_mYawChangedCount[client] > 1)
 		{
 			PrintToAdmins("%N changed their m_yaw ConVar to %.2f", client, mYaw);
-				//AnticheatLog("%L changed their m_yaw ConVar to %.2f", client, mYaw);
 		}
 	}
 
@@ -1100,7 +1115,6 @@ public void OnFilterRetrieved(QueryCookie cookie, int client, ConVarQueryResult 
 		if(g_mFilterChangedCount[client] > 1)
 		{
 			PrintToAdmins("%N changed their m_filter ConVar to %d", client, mFilter);
-				//AnticheatLog("%L changed their m_filter ConVar to %d", client, mFilter);
 		}
 	}
 
@@ -1119,7 +1133,6 @@ public void OnCustomAccelRetrieved(QueryCookie cookie, int client, ConVarQueryRe
 		if(g_mCustomAccelChangedCount[client] > 1)
 		{
 			PrintToAdmins("%N changed their m_customaccel ConVar to %d", client, mCustomAccel);
-				//AnticheatLog("%L changed their m_customaccel ConVar to %d", client, mCustomAccel);
 		}
 	}
 
@@ -1156,7 +1169,6 @@ public void OnCustomAccelScaleRetrieved(QueryCookie cookie, int client, ConVarQu
 		if(g_mCustomAccelScaleChangedCount[client] > 1)
 		{
 			PrintToAdmins("%N changed their m_customaccel_scale ConVar to %f", client, mCustomAccelScale);
-				//AnticheatLog("%L changed their m_customaccel ConVar to %d", client, mCustomAccel);
 		}
 	}
 
@@ -1175,7 +1187,6 @@ public void OnCustomAccelExRetrieved(QueryCookie cookie, int client, ConVarQuery
 		if(g_mCustomAccelExponentChangedCount[client] > 1)
 		{
 			PrintToAdmins("%N changed their m_customaccel_exponent ConVar to %f", client, mCustomAccelExponent);
-				//AnticheatLog("%L changed their m_customaccel ConVar to %d", client, mCustomAccel);
 		}
 	}
 
@@ -1193,7 +1204,6 @@ public void OnRawInputRetrieved(QueryCookie cookie, int client, ConVarQueryResul
 		if(g_mRawInputChangedCount[client] > 1)
 		{
 			PrintToAdmins("%N changed their m_rawinput ConVar to %d", client, mRawInput);
-			//AnticheatLog(client, "%L changed their m_rawinput ConVar to %d", mRawInput);
 		}
 	}
 
@@ -1211,7 +1221,6 @@ public void OnSensitivityRetrieved(QueryCookie cookie, int client, ConVarQueryRe
 		if(g_SensitivityChangedCount[client] > 1)
 		{
 			PrintToAdmins("%N changed their sensitivity ConVar to %.2f", client, sensitivity);
-				//AnticheatLog("%L changed their sensitivity ConVar to %.2f", client, sensitivity);
 		}
 	}
 
@@ -1229,7 +1238,6 @@ public void OnYawSensitivityRetrieved(QueryCookie cookie, int client, ConVarQuer
 		if(g_JoySensitivityChangedCount[client] > 1)
 		{
 			PrintToAdmins("%N changed their joy_yawsensitivity ConVar to %.2f", client, sensitivity);
-				//AnticheatLog("%L changed their joy_yawsensitivity ConVar to %.2f", client, sensitivity);
 		}
 	}
 
@@ -1247,7 +1255,6 @@ public void OnZoomSensitivityRetrieved(QueryCookie cookie, int client, ConVarQue
 		if(g_ZoomSensitivityChangedCount[client] > 1)
 		{
 			PrintToAdmins("%N changed their %s ConVar to %.2f", client, cvarName, sensitivity);
-				//AnticheatLog("%L changed their joy_yawsensitivity ConVar to %.2f", client, sensitivity);
 		}
 	}
 
@@ -1265,7 +1272,6 @@ public void OnJoystickRetrieved(QueryCookie cookie, int client, ConVarQueryResul
 		if(g_JoyStickChangedCount[client] > 1)
 		{
 			PrintToAdmins("%N changed their joystick ConVar to %d", client, joyStick);
-				//AnticheatLog("%L changed their joystick ConVar to %d", client, joyStick);
 		}
 	}
 
@@ -1286,7 +1292,7 @@ public Action Hook_OnTouch(int client, int entity)
 	{
 		g_bTouchesFuncRotating[client] = true;
 	}
-
+	return Plugin_Continue;
 }
 
 public Action Bash_Stats(int client, int args)
@@ -1463,6 +1469,7 @@ public int BashStats_MainMenu(Menu menu, MenuAction action, int param1, int para
 	{
 		delete menu;
 	}
+	return 0;
 }
 
 void PerformMOTDTest(int client)
@@ -1559,6 +1566,7 @@ public int BashStats_StartStrafesMenu(Menu menu, MenuAction action, int param1, 
 	{
 		delete menu;
 	}
+	return 0;
 }
 
 void ShowBashStats_EndStrafes(int client)
@@ -1630,6 +1638,7 @@ public int BashStats_EndStrafesMenu(Menu menu, MenuAction action, int param1, in
 	{
 		delete menu;
 	}
+	return 0;
 }
 
 void ShowBashStats_KeySwitches(int client)
@@ -1675,6 +1684,7 @@ public int BashStats_KeySwitchesMenu(Menu menu, MenuAction action, int param1, i
 	{
 		delete menu;
 	}
+	return 0;
 }
 
 void ShowBashStats_KeySwitches_Move(int client)
@@ -1783,6 +1793,7 @@ public int BashStats_KeySwitchesMenu_Move(Menu menu, MenuAction action, int para
 	{
 		delete menu;
 	}
+	return 0;
 }
 
 float StandardDeviation(int[] array, int size, float mean, bool countZeroes = true)
@@ -1959,6 +1970,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 		g_bTouchesFuncRotating[client] = false;
 		g_bTouchesWall[client] = false;
 	}
+	return Plugin_Continue;
 }
 
 int g_iIllegalYawCount[MAXPLAYERS + 1];
@@ -2683,6 +2695,7 @@ public Action Timer_NullKick(Handle timer, int userid)
 	{
 		KickClient(client, "Kicked for potentional movement config");
 	}
+	return Plugin_Continue;
 }
 
 // If a player triggers this while they are turning and their turning rate is legal from the CheckForIllegalTurning function, then we can probably autoban
