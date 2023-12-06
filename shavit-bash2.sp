@@ -2700,7 +2700,7 @@ void CheckForIllegalMovement(int client, float vel[3], int buttons)
 			g_iYawChangeCount[client]++;
 		}
 	}
-	else if((FloatAbs(vel[0]) != fMaxMove && vel[0] != 0.0) || (FloatAbs(vel[1]) != fMaxMove && vel[1] != 0.0))
+	else if( ( (FloatAbs(vel[0]) != fMaxMove && FloatAbs(vel[0]) != (fMaxMove / 2) && vel[0] != 0.0) || ( (FloatAbs(vel[1]) != fMaxMove && FloatAbs(vel[1]) != (fMaxMove/2)) && vel[1] != 0.0)))
 	{
 		g_iIllegalSidemoveCount[client]++;
 
