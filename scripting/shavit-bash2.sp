@@ -347,7 +347,7 @@ public void OnPluginStart()
 	g_Engine = GetEngineVersion();
 	//RegAdminCmd("bash2_stats", Bash_Stats, ADMFLAG_RCON, "Check a player's strafe stats");
 	//RegAdminCmd("bash2_admin", Bash_AdminMode, ADMFLAG_RCON, "Opt in/out of admin mode (Prints bash info into chat).");
-	//RegAdminCmd("bash2_test", Bash_Test, ADMFLAG_RCON, "trigger a test message so you can know if webhooks are working :)");
+	RegAdminCmd("bash2_test", Bash_Test, ADMFLAG_RCON, "trigger a test message so you can know if webhooks are working :)");
 
 	RegConsoleCmd("bash2_stats", Bash_Stats, "Check a player's strafe stats");
 	RegConsoleCmd("bash2_admin", Bash_AdminMode, "Opt in/out of admin mode (Prints bash info into chat).");
@@ -662,7 +662,7 @@ public void OnMapStart()
 			if(IsClientInGame(iclient))
 			{
 				OnClientConnected(iclient);
-				OnClientPutInServer(iclient);
+				OnClientAuthorized(iclient, "");
 			}
 		}
 	}
@@ -886,7 +886,7 @@ public void OnClientPostAdminCheck(int client)
 	}
 }
 
-public void OnClientPutInServer(int client)
+public void OnClientAuthorized(int client, const char[] auth)
 {
 	if(IsFakeClient(client))
 		return;
@@ -1049,7 +1049,7 @@ public Action Hook_GroundFlags(int entity, const char[] PropName, int &iValue, i
 
 void QueryForCvars(int client)
 {
-	if(IsFakeClient(client) || !IsClientInGame(client)) {
+	if(!IsValidClient(client)) {
 		return;
 	}
 	if(g_Engine == Engine_CSS) QueryClientConVar(client, "cl_yawspeed", OnYawSpeedRetrieved);
