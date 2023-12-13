@@ -1,16 +1,12 @@
-#define TIMER
+#define TIMER 1
 
 #include <sourcemod>
 #include <sdktools>
 #include <cstrike>
 #include <sdkhooks>
-
-#if defined TIMER
 #include <shavit>
-#endif
-
-#undef REQUIRE_EXTENSIONS
 #include <dhooks>
+#undef REQUIRE_EXTENSIONS
 #include <sendproxy>
 
 #pragma newdecls required
@@ -21,10 +17,10 @@
 public Plugin myinfo =
 {
 	name = "[BASH] (Blacky's Anti-Strafehack)",
-	author = "Blacky, edited by carnifex",
+	author = "Blacky, edited by carnifex/nimmy",
 	description = "Detects strafe hackers",
 	version = "2.0",
-	url = "https://github.com/hermansimensen/bash2"
+	url = "https://github.com/Nimmy2222/bash2"
 };
 
 // Definitions
@@ -662,7 +658,7 @@ public void OnMapStart()
 			if(IsClientInGame(iclient))
 			{
 				OnClientConnected(iclient);
-				OnClientAuthorized(iclient, "");
+				OnClientPutInServer(iclient);
 			}
 		}
 	}
@@ -886,9 +882,9 @@ public void OnClientPostAdminCheck(int client)
 	}
 }
 
-public void OnClientAuthorized(int client, const char[] auth)
+public void OnClientPutInServer(int client)
 {
-	if(IsFakeClient(client))
+	if(!IsValidClient(client))
 		return;
 
 	SDKHook(client, SDKHook_Touch, Hook_OnTouch);
@@ -904,8 +900,6 @@ public void OnClientAuthorized(int client, const char[] auth)
 		SendProxy_Hook(client, "m_fFlags", Prop_Int, Hook_GroundFlags);
 	}
 	#endif
-
-	QueryForCvars(client);
 }
 
 public void OnClientDisconnect(int client)
@@ -1049,7 +1043,7 @@ public Action Hook_GroundFlags(int entity, const char[] PropName, int &iValue, i
 
 void QueryForCvars(int client)
 {
-	if(!IsValidClient(client)) {
+	if(!IsValidClient(client) || !IsClientAuthorized(client)) {
 		return;
 	}
 	if(g_Engine == Engine_CSS) QueryClientConVar(client, "cl_yawspeed", OnYawSpeedRetrieved);
