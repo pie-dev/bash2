@@ -347,7 +347,6 @@ public void OnPluginStart()
 	g_hBashCmdPublic = CreateConVar("bash_public_command", "1", "if bash command is public 0 or 1");
 
 	g_hEnabledCookie = RegClientCookie("bash2_logs_enabled", "if logs are on", CookieAccess_Private);
-	RegConsoleCmd("bash_restart", Bash_Restart, "restart");
 
 	AutoExecConfig(true, "bash", "sourcemod");
 
@@ -1404,12 +1403,6 @@ public Action Bash_Stats(int client, int args)
 		}
 	}
 
-	return Plugin_Handled;
-}
-
-public Action Bash_Restart(int client, int args)
-{
-	ServerCommand("sm_rcon _restart");
 	return Plugin_Handled;
 }
 
