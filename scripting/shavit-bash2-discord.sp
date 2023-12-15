@@ -10,7 +10,7 @@ ConVar gCV_OnlyBans;
 public Plugin myinfo =
 {
 	name = "[BASH] Discord",
-	author = "xwidow/nimm",
+	author = "xwidow/nimmy",
 	description = "",
 	version = "1.0.0",
 	url = "https://github.com/Nimmy2222/bash2"

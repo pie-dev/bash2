@@ -5,6 +5,7 @@
 #include <cstrike>
 #include <sdkhooks>
 #include <shavit>
+#include <clientprefs>
 #include <dhooks>
 #undef REQUIRE_EXTENSIONS
 #include <sendproxy>
@@ -134,6 +135,8 @@ int   g_iStartStrafe_LastRecordedTick[MAXPLAYERS + 1];
 int   g_iStartStrafe_LastTickDifference[MAXPLAYERS + 1];
 bool  g_bStartStrafe_IsRecorded[MAXPLAYERS + 1][MAX_FRAMES];
 int   g_iStartStrafe_IdenticalCount[MAXPLAYERS + 1];
+int g_iLastStart_Identicals[MAXPLAYERS + 1];
+int g_iLastEnd_Identicals[MAXPLAYERS + 1];
 int   g_iEndStrafe_CurrentFrame[MAXPLAYERS + 1];
 any   g_iEndStrafe_Stats[MAXPLAYERS + 1][7][MAX_FRAMES];
 int   g_iEndStrafe_LastRecordedTick[MAXPLAYERS + 1];
@@ -153,7 +156,6 @@ int   g_iLastIllegalSidemoveCount[MAXPLAYERS + 1];
 int   g_iLastInvalidButtonCount[MAXPLAYERS + 1];
 int   g_iYawChangeCount[MAXPLAYERS + 1];
 
-//bool  g_bTasLoaded;
 bool  g_bCheckedYet[MAXPLAYERS + 1];
 float g_MOTDTestAngles[MAXPLAYERS + 1][3];
 bool  g_bMOTDTest[MAXPLAYERS + 1];
@@ -248,6 +250,8 @@ enum struct fuck_sourcemod
 	int   g_iStartStrafe_LastTickDifference;
 	bool  g_bStartStrafe_IsRecorded[MAX_FRAMES];
 	int   g_iStartStrafe_IdenticalCount;
+	int g_iLastStart_Identicals;
+	int g_iLastEnd_Identicals;
 	int   g_iEndStrafe_CurrentFrame;
 
 	//any   g_iEndStrafe_Stats[7][MAX_FRAMES];
@@ -302,6 +306,11 @@ Handle g_fwdOnClientBanned;
 ConVar g_hBanLength;
 char   g_sBanLength[32];
 ConVar g_hAutoban;
+ConVar g_hDevBan;
+ConVar g_hIdentificalStrafeBan;
+ConVar g_hBashCmdPublic;
+Cookie g_hEnabledCookie;
+
 bool g_bAdminMode[MAXPLAYERS + 1];
 //ConVar g_hQueryRate;
 ConVar g_hPersistentData;
@@ -333,6 +342,13 @@ public void OnPluginStart()
 	g_hAutoban = CreateConVar("bash_autoban", "1", "Auto ban players who are detected", _, true, 0.0, true, 1.0);
 	HookConVarChange(g_hBanLength, OnBanLengthChanged);
 	g_hPersistentData = CreateConVar("bash_persistent_data", "1", "Whether to save and reload strafe stats on a map for players when they disconnect.\nThis is useful to prevent people from frequently rejoining to wipe their strafe stats.", _, true, 0.0, true, 1.0);
+	g_hDevBan = CreateConVar("bash_devban", "0.35", "Offset threshold at which to ban a player, 0.0 - 0.8", _, true, 0.0, true, 0.8);
+	g_hIdentificalStrafeBan = CreateConVar("bash_idential_offset_ban", "25", "Threshold to ban player for identical sync offsets 15 - 50", _, true, 15.0, true, 50.0);
+	g_hBashCmdPublic = CreateConVar("bash_public_command", "1", "if bash command is public 0 or 1");
+
+	g_hEnabledCookie = RegClientCookie("bash2_logs_enabled", "if logs are on", CookieAccess_Private);
+	RegConsoleCmd("bash_restart", Bash_Restart, "restart");
+
 	AutoExecConfig(true, "bash", "sourcemod");
 
 	g_fwdOnDetection = CreateGlobalForward("Bash_OnDetection", ET_Event, Param_Cell, Param_String);
@@ -341,10 +357,8 @@ public void OnPluginStart()
 	//HookUserMessage(umVGUIMenu, OnVGUIMenu, true);
 
 	g_Engine = GetEngineVersion();
-	//RegAdminCmd("bash2_stats", Bash_Stats, ADMFLAG_RCON, "Check a player's strafe stats");
-	//RegAdminCmd("bash2_admin", Bash_AdminMode, ADMFLAG_RCON, "Opt in/out of admin mode (Prints bash info into chat).");
-	RegAdminCmd("bash2_test", Bash_Test, ADMFLAG_RCON, "trigger a test message so you can know if webhooks are working :)");
-
+	RegAdminCmd("sm_bash2_test", Bash_Test, ADMFLAG_RCON, "trigger a test message so you can know if webhooks are working :)");
+	RegConsoleCmd("sm_bash2", Bash_AdminMode, "Opt in/out of admin mode (Prints bash info into chat).");
 	RegConsoleCmd("bash2_stats", Bash_Stats, "Check a player's strafe stats");
 	RegConsoleCmd("bash2_admin", Bash_AdminMode, "Opt in/out of admin mode (Prints bash info into chat).");
 
@@ -588,7 +602,7 @@ public Action Event_PlayerJump(Event event, const char[] name, bool dontBroadcas
 				#endif
 				AnticheatLog(iclient, "has %.2f％ gains (Yawing %.1f％, Timing: %.1f％, SPJ: %.1f, Style: %s)", gainPct, yawPct, timingPct, spj, sStyle);
 
-				if(gainPct == 100.0 && timingPct == 100.0)
+				if(gainPct == 100.0)
 				{
 					AutoBanPlayer(iclient);
 				}
@@ -659,6 +673,7 @@ public void OnMapStart()
 			{
 				OnClientConnected(iclient);
 				OnClientPutInServer(iclient);
+				OnClientCookiesCached(iclient);
 			}
 		}
 	}
@@ -666,11 +681,22 @@ public void OnMapStart()
 	SaveOldLogs();
 }
 
+public void OnClientCookiesCached(int client)
+{
+	g_bAdminMode[client] = false;
+	char sCookie[8];
+	GetClientCookie(client, g_hEnabledCookie, sCookie, sizeof(sCookie));
+	int val = StringToInt(sCookie);
+	if(val) {
+		Bash_AdminMode(client, 0);
+	}
+}
+
 public Action Timer_QueryCvars(Handle timer, any data)
 {
 	for(int iclient = 1; iclient <= MaxClients; iclient++)
 	{
-		if(IsValidClient(iclient))
+		if(IsValidClient(iclient, true) && !IsFakeClient(iclient))
 		{
 			QueryForCvars(iclient);
 		}
@@ -706,6 +732,8 @@ public void OnClientConnected(int client)
 	g_iEndStrafe_LastTickDifference[client] = 0;
 	g_iStartStrafe_IdenticalCount[client] = 0;
 	g_iEndStrafe_IdenticalCount[client]   = 0;
+	g_iLastStart_Identicals[client] = 0;
+	g_iLastEnd_Identicals[client] = 0;
 
 	g_iYawSpeed[client] = 210.0;
 	g_mYaw[client] = 0.0;
@@ -843,6 +871,8 @@ public void OnClientPostAdminCheck(int client)
 		g_iStartStrafe_LastTickDifference[client] = x.g_iStartStrafe_LastTickDifference;
 		g_bStartStrafe_IsRecorded[client] = x.g_bStartStrafe_IsRecorded;
 		g_iStartStrafe_IdenticalCount[client] = x.g_iStartStrafe_IdenticalCount;
+		g_iLastStart_Identicals[client] = x.g_iLastStart_Identicals;
+		g_iLastEnd_Identicals[client] = x.g_iLastEnd_Identicals;
 
 		g_iEndStrafe_CurrentFrame[client] = x.g_iEndStrafe_CurrentFrame;
 
@@ -884,7 +914,7 @@ public void OnClientPostAdminCheck(int client)
 
 public void OnClientPutInServer(int client)
 {
-	if(!IsValidClient(client))
+	if(!IsValidClient(client) || IsFakeClient(client))
 		return;
 
 	SDKHook(client, SDKHook_Touch, Hook_OnTouch);
@@ -900,6 +930,7 @@ public void OnClientPutInServer(int client)
 		SendProxy_Hook(client, "m_fFlags", Prop_Int, Hook_GroundFlags);
 	}
 	#endif
+	QueryForCvars(client);
 }
 
 public void OnClientDisconnect(int client)
@@ -986,6 +1017,8 @@ public void OnClientDisconnect(int client)
 		x.g_iStartStrafe_LastTickDifference = g_iStartStrafe_LastTickDifference[client];
 		x.g_bStartStrafe_IsRecorded = g_bStartStrafe_IsRecorded[client];
 		x.g_iStartStrafe_IdenticalCount = g_iStartStrafe_IdenticalCount[client];
+		x.g_iLastStart_Identicals = g_iLastStart_Identicals[client];
+		x.g_iLastEnd_Identicals = g_iLastEnd_Identicals[client];
 
 		x.g_iEndStrafe_CurrentFrame = g_iEndStrafe_CurrentFrame[client];
 
@@ -1043,9 +1076,6 @@ public Action Hook_GroundFlags(int entity, const char[] PropName, int &iValue, i
 
 void QueryForCvars(int client)
 {
-	if(!IsValidClient(client) || !IsClientAuthorized(client)) {
-		return;
-	}
 	if(g_Engine == Engine_CSS) QueryClientConVar(client, "cl_yawspeed", OnYawSpeedRetrieved);
 	QueryClientConVar(client, "m_yaw", OnYawRetrieved);
 	QueryClientConVar(client, "m_filter", OnFilterRetrieved);
@@ -1063,6 +1093,9 @@ void QueryForCvars(int client)
 
 public void OnYawSpeedRetrieved(QueryCookie cookie, int client, ConVarQueryResult result, const char[] cvarName, const char[] cvarValue)
 {
+	if(!cookie) {
+		return;
+	}
 	g_iYawSpeed[client] = StringToFloat(cvarValue);
 
 	if(g_iYawSpeed[client] < 0)
@@ -1073,6 +1106,9 @@ public void OnYawSpeedRetrieved(QueryCookie cookie, int client, ConVarQueryResul
 
 public void OnYawRetrieved(QueryCookie cookie, int client, ConVarQueryResult result, const char[] cvarName, const char[] cvarValue)
 {
+	if(!cookie) {
+		return;
+	}
 	float mYaw = StringToFloat(cvarValue);
 	if(mYaw != g_mYaw[client])
 	{
@@ -1090,6 +1126,9 @@ public void OnYawRetrieved(QueryCookie cookie, int client, ConVarQueryResult res
 
 public void OnFilterRetrieved(QueryCookie cookie, int client, ConVarQueryResult result, const char[] cvarName, const char[] cvarValue)
 {
+	if(!cookie) {
+		return;
+	}
 	bool mFilter = (0.0 <= StringToFloat(cvarValue) < 1.0)?false:true;
 	if(mFilter != g_mFilter[client])
 	{
@@ -1107,6 +1146,9 @@ public void OnFilterRetrieved(QueryCookie cookie, int client, ConVarQueryResult 
 
 public void OnCustomAccelRetrieved(QueryCookie cookie, int client, ConVarQueryResult result, const char[] cvarName, const char[] cvarValue)
 {
+	if(!cookie) {
+		return;
+	}
 	int mCustomAccel = StringToInt(cvarValue);
 
 	if(mCustomAccel != g_mCustomAccel[client])
@@ -1125,6 +1167,9 @@ public void OnCustomAccelRetrieved(QueryCookie cookie, int client, ConVarQueryRe
 
 public void OnCustomAccelMaxRetrieved(QueryCookie cookie, int client, ConVarQueryResult result, const char[] cvarName, const char[] cvarValue)
 {
+	if(!cookie) {
+		return;
+	}
 	float mCustomAccelMax = StringToFloat(cvarValue);
 
 	if(mCustomAccelMax != g_mCustomAccelMax[client])
@@ -1143,6 +1188,9 @@ public void OnCustomAccelMaxRetrieved(QueryCookie cookie, int client, ConVarQuer
 
 public void OnCustomAccelScaleRetrieved(QueryCookie cookie, int client, ConVarQueryResult result, const char[] cvarName, const char[] cvarValue)
 {
+	if(!cookie) {
+		return;
+	}
 	float mCustomAccelScale = StringToFloat(cvarValue);
 
 	if(mCustomAccelScale != g_mCustomAccelScale[client])
@@ -1161,6 +1209,9 @@ public void OnCustomAccelScaleRetrieved(QueryCookie cookie, int client, ConVarQu
 
 public void OnCustomAccelExRetrieved(QueryCookie cookie, int client, ConVarQueryResult result, const char[] cvarName, const char[] cvarValue)
 {
+	if(!cookie) {
+		return;
+	}
 	float mCustomAccelExponent = StringToFloat(cvarValue);
 
 	if(mCustomAccelExponent != g_mCustomAccelExponent[client])
@@ -1179,6 +1230,9 @@ public void OnCustomAccelExRetrieved(QueryCookie cookie, int client, ConVarQuery
 
 public void OnRawInputRetrieved(QueryCookie cookie, int client, ConVarQueryResult result, const char[] cvarName, const char[] cvarValue)
 {
+	if(!cookie) {
+		return;
+	}
 	bool mRawInput = (0.0 <= StringToFloat(cvarValue) < 1.0)?false:true;
 	if(mRawInput != g_mRawInput[client])
 	{
@@ -1196,6 +1250,9 @@ public void OnRawInputRetrieved(QueryCookie cookie, int client, ConVarQueryResul
 
 public void OnSensitivityRetrieved(QueryCookie cookie, int client, ConVarQueryResult result, const char[] cvarName, const char[] cvarValue)
 {
+	if(!cookie) {
+		return;
+	}
 	float sensitivity = StringToFloat(cvarValue);
 	if(sensitivity != g_Sensitivity[client])
 	{
@@ -1213,6 +1270,9 @@ public void OnSensitivityRetrieved(QueryCookie cookie, int client, ConVarQueryRe
 
 public void OnYawSensitivityRetrieved(QueryCookie cookie, int client, ConVarQueryResult result, const char[] cvarName, const char[] cvarValue)
 {
+	if(!cookie) {
+		return;
+	}
 	float sensitivity = StringToFloat(cvarValue);
 	if(sensitivity != g_JoySensitivity[client])
 	{
@@ -1230,6 +1290,9 @@ public void OnYawSensitivityRetrieved(QueryCookie cookie, int client, ConVarQuer
 
 public void OnZoomSensitivityRetrieved(QueryCookie cookie, int client, ConVarQueryResult result, const char[] cvarName, const char[] cvarValue)
 {
+	if(!cookie) {
+		return;
+	}
 	float sensitivity = StringToFloat(cvarValue);
 	if(sensitivity != g_ZoomSensitivity[client])
 	{
@@ -1247,6 +1310,9 @@ public void OnZoomSensitivityRetrieved(QueryCookie cookie, int client, ConVarQue
 
 public void OnJoystickRetrieved(QueryCookie cookie, int client, ConVarQueryResult result, const char[] cvarName, const char[] cvarValue)
 {
+	if(!cookie) {
+		return;
+	}
 	bool joyStick = (0.0 <= StringToFloat(cvarValue) < 1.0)?false:true;
 	if(joyStick != g_JoyStick[client])
 	{
@@ -1341,16 +1407,25 @@ public Action Bash_Stats(int client, int args)
 	return Plugin_Handled;
 }
 
+public Action Bash_Restart(int client, int args)
+{
+	ServerCommand("sm_rcon _restart");
+	return Plugin_Handled;
+}
+
 public Action Bash_AdminMode(int client, int args)
 {
-	if(g_bAdminMode[client])
-	{
-		g_bAdminMode[client] = !g_bAdminMode[client];
-		ReplyToCommand(client, "[BASH] You are no longer in admin mode.");
-	} else {
-		g_bAdminMode[client] = !g_bAdminMode[client]
-		ReplyToCommand(client, "[BASH] You are now in admin mode.");
+	if(!g_hBashCmdPublic.IntValue) {
+		if(!CheckCommandAccess(client, "sm_ban", ADMFLAG_BAN)) {
+			ReplyToCommand(client, "[BASH] You do not have permssions.");
+			SetClientCookie(client, g_hEnabledCookie, "0");
+
+			return Plugin_Handled;
+		}
 	}
+	g_bAdminMode[client] = !g_bAdminMode[client];
+	SetClientCookie(client, g_hEnabledCookie, g_bAdminMode[client] ? "1":"0");
+	ReplyToCommand(client, "[BASH] Logs: %s", g_bAdminMode[client] ? "On":"Off");
 	return Plugin_Handled;
 }
 
@@ -2400,22 +2475,30 @@ stock void RecordStartStrafe(int client, int button, int turnDir, const char[] c
 	g_bStartStrafe_IsRecorded[client][currFrame] = true;
 	g_iStartStrafe_CurrentFrame[client] = (g_iStartStrafe_CurrentFrame[client] + 1) % MAX_FRAMES;
 
-
-	if(g_iStartStrafe_Stats[client][StrafeData_Difference][currFrame] == g_iStartStrafe_LastTickDifference[client] && !IsInLeftRight(client, g_iRealButtons[client]))
+	//log once at ban threshold or stopped -1ing, every 20 after
+	if(g_iStartStrafe_Stats[client][StrafeData_Difference][currFrame] == g_iStartStrafe_LastTickDifference[client])
 	{
 		g_iStartStrafe_IdenticalCount[client]++;
-
-		if (g_iStartStrafe_IdenticalCount[client] >= IDENTICAL_STRAFE_MIN)
-		{
-			AnticheatLog(client, "too many %i strafes in a row (%d)", g_iStartStrafe_LastTickDifference[client], g_iStartStrafe_IdenticalCount[client]);
-			AutoBanPlayer(client);
+		if(g_iStartStrafe_IdenticalCount[client] >= g_hIdentificalStrafeBan.IntValue && g_iStartStrafe_IdenticalCount[client] % g_hIdentificalStrafeBan.IntValue == 0) {
+			char sStyle[32];
+			int style = Shavit_GetBhopStyle(client);
+			Shavit_GetStyleStrings(style, sStyleName, g_sStyleStrings[style].sStyleName, sizeof(stylestrings_t::sStyleName));
+			FormatEx(sStyle, sizeof(sStyle), "%s", g_sStyleStrings[style].sStyleName);
+			AnticheatLog(client, "way too many %i start strafes in a row (%d) style: %s", g_iStartStrafe_LastTickDifference[client], g_iStartStrafe_IdenticalCount[client], sStyle);
+		}
+		if(g_iStartStrafe_IdenticalCount[client] > g_iLastStart_Identicals[client]) {
+			g_iLastStart_Identicals[client] = g_iStartStrafe_IdenticalCount[client];
 		}
 	}
 	else
 	{
-		if (g_iStartStrafe_IdenticalCount[client] >= 15 && g_iStartStrafe_IdenticalCount[client] < IDENTICAL_STRAFE_MIN)
+		if (g_iStartStrafe_IdenticalCount[client] >= 15)
 		{
-			AnticheatLog(client, "too many %i strafes in a row (%d)", g_iStartStrafe_LastTickDifference[client], g_iStartStrafe_IdenticalCount[client]);
+			char sStyle[32];
+			int style = Shavit_GetBhopStyle(client);
+			Shavit_GetStyleStrings(style, sStyleName, g_sStyleStrings[style].sStyleName, sizeof(stylestrings_t::sStyleName));
+			FormatEx(sStyle, sizeof(sStyle), "%s", g_sStyleStrings[style].sStyleName);
+			AnticheatLog(client, "too many %i start strafes in a row (%d) style: %s", g_iStartStrafe_LastTickDifference[client], g_iStartStrafe_IdenticalCount[client], sStyle);
 		}
 
 		g_iStartStrafe_LastTickDifference[client] = g_iStartStrafe_Stats[client][StrafeData_Difference][currFrame];
@@ -2442,25 +2525,21 @@ stock void RecordStartStrafe(int client, int button, int turnDir, const char[] c
 		float mean = GetAverage(array, size);
 		float sd   = StandardDeviation(array, size, mean);
 
-		if(sd < 0.8)
-		{
-			char sStyle[32];
-			#if defined TIMER
+		char sStyle[32];
+		bool toomany = g_iLastStart_Identicals[client] >= g_hIdentificalStrafeBan.IntValue;
+		if(sd < 0.8 || toomany) {
 			int style = Shavit_GetBhopStyle(client);
 			Shavit_GetStyleStrings(style, sStyleName, g_sStyleStrings[style].sStyleName, sizeof(stylestrings_t::sStyleName));
 			FormatEx(sStyle, sizeof(sStyle), "%s", g_sStyleStrings[style].sStyleName)
-			#endif
-			float timingPct = float(timingCount) / float(MAX_FRAMES);
-			AnticheatLog(client, "start strafe, avg: %.2f, dev: %.2f, Timing: %.1f％, style: %s", mean, sd, timingPct * 100, sStyle);
+		}
 
-			#if defined TIMER
-			if(sd <= 0.4 && timingPct == 1.0)
-			#else
-			if(sd <= 0.4)
-			#endif
-			{
-				AutoBanPlayer(client);
-			}
+		if(sd < 0.8 && sd > g_hDevBan.FloatValue && !toomany)
+		{
+			AnticheatLog(client, "start strafe, avg: %.2f, dev: %.2f, style: %s", mean, sd, sStyle);
+		} else if (sd <= g_hDevBan.FloatValue || toomany) {
+			AnticheatLog(client, ".BAN. start dev: %.2f, identicals: %i, style: %s", sd, g_iLastStart_Identicals[client], sStyle);
+			AutoBanPlayer(client);
+			g_iLastStart_Identicals[client] = 0;
 		}
 	}
 
@@ -2503,21 +2582,30 @@ stock void RecordEndStrafe(int client, int button, int turnDir, const char[] cal
 	g_iEndStrafe_Stats[client][StrafeData_Tick][currFrame]       = g_iCmdNum[client];
 	g_iEndStrafe_CurrentFrame[client] = (g_iEndStrafe_CurrentFrame[client] + 1) % MAX_FRAMES;
 
-	if(g_iEndStrafe_Stats[client][StrafeData_Difference][currFrame] == g_iEndStrafe_LastTickDifference[client] && !IsInLeftRight(client, g_iRealButtons[client]))
+	if(g_iEndStrafe_Stats[client][StrafeData_Difference][currFrame] == g_iEndStrafe_LastTickDifference[client])
 	{
 		g_iEndStrafe_IdenticalCount[client]++;
-
-		if (g_iEndStrafe_IdenticalCount[client] >= IDENTICAL_STRAFE_MIN)
+		if (g_iEndStrafe_IdenticalCount[client] >= g_hIdentificalStrafeBan.IntValue && g_iEndStrafe_IdenticalCount[client] % g_hIdentificalStrafeBan.IntValue == 0)
 		{
-			AnticheatLog(client, "too many %i strafes in a row (%d)", g_iEndStrafe_LastTickDifference[client], g_iEndStrafe_IdenticalCount[client]);
-			AutoBanPlayer(client);
+			char sStyle[32];
+			int style = Shavit_GetBhopStyle(client);
+			Shavit_GetStyleStrings(style, sStyleName, g_sStyleStrings[style].sStyleName, sizeof(stylestrings_t::sStyleName));
+			FormatEx(sStyle, sizeof(sStyle), "%s", g_sStyleStrings[style].sStyleName)
+			AnticheatLog(client, "way too many %i end strafes in a row (%i) style: %s", g_iEndStrafe_LastTickDifference[client], g_iEndStrafe_IdenticalCount[client], sStyle);
+		}
+		if(g_iEndStrafe_IdenticalCount[client] > g_iLastEnd_Identicals[client]) {
+			g_iLastEnd_Identicals[client] = g_iEndStrafe_IdenticalCount[client];
 		}
 	}
 	else
 	{
-		if (g_iEndStrafe_IdenticalCount[client] >= 15 && g_iEndStrafe_IdenticalCount[client] < IDENTICAL_STRAFE_MIN)
+		if (g_iEndStrafe_IdenticalCount[client] >= 15)
 		{
-			AnticheatLog(client, "too many %i strafes in a row (%d)", g_iEndStrafe_LastTickDifference[client], g_iEndStrafe_IdenticalCount[client]);
+			char sStyle[32];
+			int style = Shavit_GetBhopStyle(client);
+			Shavit_GetStyleStrings(style, sStyleName, g_sStyleStrings[style].sStyleName, sizeof(stylestrings_t::sStyleName));
+			FormatEx(sStyle, sizeof(sStyle), "%s", g_sStyleStrings[style].sStyleName)
+			AnticheatLog(client, "too many %i end strafes in a row (%i) style: %s", g_iEndStrafe_LastTickDifference[client], g_iEndStrafe_IdenticalCount[client], sStyle);
 		}
 
 		g_iEndStrafe_LastTickDifference[client] = g_iEndStrafe_Stats[client][StrafeData_Difference][currFrame];
@@ -2544,26 +2632,22 @@ stock void RecordEndStrafe(int client, int button, int turnDir, const char[] cal
 		float mean = GetAverage(array, size);
 		float sd   = StandardDeviation(array, size, mean);
 
-		if(sd < 0.8)
-		{
-			char sStyle[32];
-			#if defined TIMER
+		char sStyle[32];
+		bool toomany = g_iLastEnd_Identicals[client] >= g_hIdentificalStrafeBan.IntValue;
+		if(sd< 0.8 || toomany) {
 			int style = Shavit_GetBhopStyle(client);
 			Shavit_GetStyleStrings(style, sStyleName, g_sStyleStrings[style].sStyleName, sizeof(stylestrings_t::sStyleName));
-			FormatEx(sStyle, sizeof(sStyle), "%s", g_sStyleStrings[style].sStyleName)
-			#endif
-			float timingPct = float(timingCount) / float(MAX_FRAMES);
-			AnticheatLog(client, "end strafe, avg: %.2f, dev: %.2f, Timing: %.1f％, style: %s", mean, sd, timingPct * 100, sStyle);
-
-			#if defined TIMER
-			if(sd <= 0.4 && timingPct == 1.0)
-			#else
-			if(sd <= 0.4)
-			#endif
-			{
-				AutoBanPlayer(client);
-			}
+			FormatEx(sStyle, sizeof(sStyle), "%s", g_sStyleStrings[style].sStyleName);
 		}
+
+		if(sd < 0.8 && sd > g_hDevBan.FloatValue && !toomany)
+		{
+			AnticheatLog(client, "end strafe, avg: %.2f, dev: %.2f, style: %s", mean, sd, sStyle);
+		} else if(sd <= g_hDevBan.FloatValue || toomany) {
+			AnticheatLog(client, ".BAN. end dev: %.2f, identicals: %i style: %s", sd, g_iLastEnd_Identicals[client], sStyle);
+			AutoBanPlayer(client);
+			g_iLastEnd_Identicals[client] = 0;
+ 		}
 	}
 	/*
 	char sButton[16], sTurn[16], sMove[16];
@@ -2726,7 +2810,6 @@ void CheckForIllegalMovement(int client, float vel[3], int buttons)
 			}
 
 			AnticheatLog(client, "has invalid consecutive movement values, (Joystick = %d, YawChanges = %d/%d) - %s", g_JoyStick[client], g_iYawChangeCount[client], g_iLastIllegalSidemoveCount[client], bBan?"BAN":"SUSPECT");
-			//if(bBan) AutoBanPlayer(client);
 		}
 
 		g_iYawChangeCount[client] = 0;
