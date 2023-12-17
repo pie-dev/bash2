@@ -793,6 +793,14 @@ public void OnClientDisconnect(int client)
 
 		g_aPersistentData.PushArray(x);
 	}
+	if(g_iLastStart_Identicals[client] >= g_hIdentificalStrafeBan.IntValue || g_iLastEnd_Identicals[client] >= g_hIdentificalStrafeBan.IntValue) {
+		char sStyle[32];
+		int style = Shavit_GetBhopStyle(client);
+		Shavit_GetStyleStrings(style, sStyleName, g_sStyleStrings[style].sStyleName, sizeof(stylestrings_t::sStyleName));
+		FormatEx(sStyle, sizeof(sStyle), "%s", g_sStyleStrings[style].sStyleName);
+		AnticheatLog(client, ".BAN. start identicals: %i, end identicals: %i, style: %s", g_iLastStart_Identicals[client], g_iLastEnd_Identicals[client], sStyle);
+		AutoBanPlayer(client);
+	}
 }
 
 public Action Hook_GroundFlags(int entity, const char[] PropName, int &iValue, int element)
