@@ -71,7 +71,6 @@ public Plugin myinfo =
 #define DR_TurningInfraction (1 << 13) // Client turns at impossible speeds
 
 EngineVersion g_Engine;
-int   g_iRealButtons[MAXPLAYERS + 1];
 int   g_iButtons[MAXPLAYERS + 1][2];
 int   g_iLastButtons[MAXPLAYERS + 1][2];
 int   g_iLastPressTick[MAXPLAYERS + 1][4][2];
@@ -161,83 +160,12 @@ float g_MOTDTestAngles[MAXPLAYERS + 1][3];
 bool  g_bMOTDTest[MAXPLAYERS + 1];
 int   g_iTarget[MAXPLAYERS + 1];
 
-// this is like 5600+ bytes xd
 enum struct fuck_sourcemod
 {
 	int accountid;
 
-	int   g_iRealButtons;
-	int   g_iButtons[2];
-	int   g_iLastButtons[2];
-
-	//int   g_iLastPressTick[4][2];
-	int   g_iLastPressTick_0[2];
-	int   g_iLastPressTick_1[2];
-	int   g_iLastPressTick_2[2];
-	int   g_iLastPressTick_3[2];
-
-	//int   g_iLastPressTick_Recorded[4][2];
-	int   g_iLastPressTick_Recorded_0[2];
-	int   g_iLastPressTick_Recorded_1[2];
-	int   g_iLastPressTick_Recorded_2[2];
-	int   g_iLastPressTick_Recorded_3[2];
-
-	//int   g_iLastPressTick_Recorded_KS[4][2];
-	int   g_iLastPressTick_Recorded_KS_0[2];
-	int   g_iLastPressTick_Recorded_KS_1[2];
-	int   g_iLastPressTick_Recorded_KS_2[2];
-	int   g_iLastPressTick_Recorded_KS_3[2];
-
-	int   g_iKeyPressesThisStrafe[2];
-
-	//int   g_iLastReleaseTick[4][2];
-	int   g_iLastReleaseTick_0[2];
-	int   g_iLastReleaseTick_1[2];
-	int   g_iLastReleaseTick_2[2];
-	int   g_iLastReleaseTick_3[2];
-
-	//int   g_iLastReleaseTick_Recorded[4][2];
-	int   g_iLastReleaseTick_Recorded_0[2];
-	int   g_iLastReleaseTick_Recorded_1[2];
-	int   g_iLastReleaseTick_Recorded_2[2];
-	int   g_iLastReleaseTick_Recorded_3[2];
-
-	//int   g_iLastReleaseTick_Recorded_KS[4][2];
-	int   g_iLastReleaseTick_Recorded_KS_0[2];
-	int   g_iLastReleaseTick_Recorded_KS_1[2];
-	int   g_iLastReleaseTick_Recorded_KS_2[2];
-	int   g_iLastReleaseTick_Recorded_KS_3[2];
-
-	float g_fLastMove[3];
-	int   g_iLastTurnDir;
-	int   g_iLastTurnTick;
-	int   g_iLastTurnTick_Recorded_StartStrafe;
-	int   g_iLastTurnTick_Recorded_EndStrafe;
-	int   g_iLastStopTurnTick;
-	bool  g_bIsTurning;
-	int   g_iReleaseTickAtLastEndStrafe[4];
-	float g_fLastAngles[3];
-	int   g_InvalidButtonSidemoveCount;
-	int   g_iCmdNum;
-	float g_fLastPosition[3];
-	int   g_iLastTeleportTick;
-	float g_fAngleDifference[2];
-	float g_fLastAngleDifference[2];
-
-	int   g_strafeTick;
-	float g_flRawGain;
-	bool  g_bTouchesWall;
-	int   g_iJump;
-	int   g_iTicksOnGround;
-	float g_iYawSpeed;
-	int   g_iYawTickCount;
-	int   g_iTimingTickCount;
-	int   g_iStrafesDone;
-	bool  g_bFirstSixJumps;
-
 	int   g_iStartStrafe_CurrentFrame;
 
-	//any   g_iStartStrafe_Stats[7][MAX_FRAMES];
 	any   g_iStartStrafe_Stats_0[MAX_FRAMES];
 	any   g_iStartStrafe_Stats_1[MAX_FRAMES];
 	any   g_iStartStrafe_Stats_2[MAX_FRAMES];
@@ -254,7 +182,6 @@ enum struct fuck_sourcemod
 	int g_iLastEnd_Identicals;
 	int   g_iEndStrafe_CurrentFrame;
 
-	//any   g_iEndStrafe_Stats[7][MAX_FRAMES];
 	any   g_iEndStrafe_Stats_0[MAX_FRAMES];
 	any   g_iEndStrafe_Stats_1[MAX_FRAMES];
 	any   g_iEndStrafe_Stats_2[MAX_FRAMES];
@@ -267,29 +194,6 @@ enum struct fuck_sourcemod
 	int   g_iEndStrafe_LastTickDifference;
 	bool  g_bEndStrafe_IsRecorded[MAX_FRAMES];
 	int   g_iEndStrafe_IdenticalCount;
-	int   g_iKeySwitch_CurrentFrame[2];
-
-	//any   g_iKeySwitch_Stats[3][2][MAX_FRAMES_KEYSWITCH];
-	any   g_iKeySwitch_Stats_0_0[MAX_FRAMES_KEYSWITCH];
-	any   g_iKeySwitch_Stats_0_1[MAX_FRAMES_KEYSWITCH];
-	any   g_iKeySwitch_Stats_1_0[MAX_FRAMES_KEYSWITCH];
-	any   g_iKeySwitch_Stats_1_1[MAX_FRAMES_KEYSWITCH];
-	any   g_iKeySwitch_Stats_2_0[MAX_FRAMES_KEYSWITCH];
-	any   g_iKeySwitch_Stats_2_1[MAX_FRAMES_KEYSWITCH];
-
-	//bool  g_bKeySwitch_IsRecorded[2][MAX_FRAMES_KEYSWITCH];
-	bool  g_bKeySwitch_IsRecorded_0[MAX_FRAMES_KEYSWITCH];
-	bool  g_bKeySwitch_IsRecorded_1[MAX_FRAMES_KEYSWITCH];
-
-	int   g_iKeySwitch_LastRecordedTick[2];
-	bool  g_iIllegalTurn[MAX_FRAMES];
-	int   g_iIllegalTurn_CurrentFrame;
-	bool  g_iIllegalTurn_IsTiming[MAX_FRAMES];
-	int   g_iLastIllegalReason;
-	int   g_iIllegalSidemoveCount;
-	int   g_iLastIllegalSidemoveCount;
-	int   g_iLastInvalidButtonCount;
-	int   g_iYawChangeCount;
 }
 
 bool g_bLateLoad;
@@ -435,7 +339,7 @@ stock void PrintToAdmins(const char[] msg, any...)
 
 	for (int i = 1; i <= MaxClients; i++)
 	{
-		if(!IsValidClient(i)) {
+		if(!IsClientPlayer(i)) {
 			continue;
 		}
 		if(g_bAdminMode[i]) {
@@ -695,7 +599,7 @@ public Action Timer_QueryCvars(Handle timer, any data)
 {
 	for(int iclient = 1; iclient <= MaxClients; iclient++)
 	{
-		if(IsValidClient(iclient, true) && !IsFakeClient(iclient))
+		if(IsClientPlayer(iclient, true))
 		{
 			QueryForCvars(iclient);
 		}
@@ -793,69 +697,6 @@ public void OnClientPostAdminCheck(int client)
 		g_aPersistentData.GetArray(index, x);
 		g_aPersistentData.Erase(index);
 
-		g_iRealButtons[client] = x.g_iRealButtons;
-		g_iButtons[client] = x.g_iButtons;
-		g_iLastButtons[client] = x.g_iLastButtons;
-
-		g_iLastPressTick[client][0] = x.g_iLastPressTick_0;
-		g_iLastPressTick[client][1] = x.g_iLastPressTick_1;
-		g_iLastPressTick[client][2] = x.g_iLastPressTick_2;
-		g_iLastPressTick[client][3] = x.g_iLastPressTick_3;
-
-		g_iLastPressTick_Recorded[client][0] = x.g_iLastPressTick_Recorded_0;
-		g_iLastPressTick_Recorded[client][1] = x.g_iLastPressTick_Recorded_1;
-		g_iLastPressTick_Recorded[client][2] = x.g_iLastPressTick_Recorded_2;
-		g_iLastPressTick_Recorded[client][3] = x.g_iLastPressTick_Recorded_3;
-
-		g_iLastPressTick_Recorded_KS[client][0] = x.g_iLastPressTick_Recorded_KS_0;
-		g_iLastPressTick_Recorded_KS[client][1] = x.g_iLastPressTick_Recorded_KS_1;
-		g_iLastPressTick_Recorded_KS[client][3] = x.g_iLastPressTick_Recorded_KS_2;
-		g_iLastPressTick_Recorded_KS[client][3] = x.g_iLastPressTick_Recorded_KS_3;
-
-		g_iKeyPressesThisStrafe[client] = x.g_iKeyPressesThisStrafe;
-
-		g_iLastReleaseTick[client][0] = x.g_iLastReleaseTick_0;
-		g_iLastReleaseTick[client][1] = x.g_iLastReleaseTick_1;
-		g_iLastReleaseTick[client][2] = x.g_iLastReleaseTick_2;
-		g_iLastReleaseTick[client][3] = x.g_iLastReleaseTick_3;
-
-		g_iLastReleaseTick_Recorded[client][0] = x.g_iLastReleaseTick_Recorded_0;
-		g_iLastReleaseTick_Recorded[client][1] = x.g_iLastReleaseTick_Recorded_1;
-		g_iLastReleaseTick_Recorded[client][2] = x.g_iLastReleaseTick_Recorded_2;
-		g_iLastReleaseTick_Recorded[client][3] = x.g_iLastReleaseTick_Recorded_3;
-
-		g_iLastReleaseTick_Recorded_KS[client][0] = x.g_iLastReleaseTick_Recorded_KS_0;
-		g_iLastReleaseTick_Recorded_KS[client][1] = x.g_iLastReleaseTick_Recorded_KS_1;
-		g_iLastReleaseTick_Recorded_KS[client][2] = x.g_iLastReleaseTick_Recorded_KS_2;
-		g_iLastReleaseTick_Recorded_KS[client][3] = x.g_iLastReleaseTick_Recorded_KS_3;
-
-		g_fLastMove[client] = x.g_fLastMove;
-		g_iLastTurnDir[client] = x.g_iLastTurnDir;
-		g_iLastTurnTick[client] = x.g_iLastTurnTick;
-		g_iLastTurnTick_Recorded_StartStrafe[client] = x.g_iLastTurnTick_Recorded_StartStrafe;
-		g_iLastTurnTick_Recorded_EndStrafe[client] = x.g_iLastTurnTick_Recorded_EndStrafe;
-		g_iLastStopTurnTick[client] = x.g_iLastStopTurnTick;
-		//g_bIsTurning[client] = x.g_bIsTurning;
-		g_iReleaseTickAtLastEndStrafe[client] = x.g_iReleaseTickAtLastEndStrafe;
-		g_fLastAngles[client] = x.g_fLastAngles;
-		g_InvalidButtonSidemoveCount[client] = x.g_InvalidButtonSidemoveCount;
-		g_iCmdNum[client] = x.g_iCmdNum;
-		g_fLastPosition[client] = x.g_fLastPosition;
-		//g_iLastTeleportTick[client] = x.g_iLastTeleportTick;
-		g_fAngleDifference[client] = x.g_fAngleDifference;
-		g_fLastAngleDifference[client] = x.g_fLastAngleDifference;
-
-		g_strafeTick[client] = x.g_strafeTick;
-		g_flRawGain[client] = x.g_flRawGain;
-		g_bTouchesWall[client] = x.g_bTouchesWall;
-		g_iJump[client] = x.g_iJump;
-		g_iTicksOnGround[client] = x.g_iTicksOnGround;
-		g_iYawSpeed[client] = x.g_iYawSpeed;
-		g_iYawTickCount[client] = x.g_iYawTickCount;
-		g_iTimingTickCount[client] = x.g_iTimingTickCount;
-		g_iStrafesDone[client] = x.g_iStrafesDone;
-		g_bFirstSixJumps[client] = x.g_bFirstSixJumps;
-
 		g_iStartStrafe_CurrentFrame[client] = x.g_iStartStrafe_CurrentFrame;
 
 		g_iStartStrafe_Stats[client][0] = x.g_iStartStrafe_Stats_0;
@@ -887,33 +728,12 @@ public void OnClientPostAdminCheck(int client)
 		g_iEndStrafe_LastTickDifference[client] = x.g_iEndStrafe_LastTickDifference;
 		g_bEndStrafe_IsRecorded[client] = x.g_bEndStrafe_IsRecorded;
 		g_iEndStrafe_IdenticalCount[client] = x.g_iEndStrafe_IdenticalCount;
-		g_iKeySwitch_CurrentFrame[client] = x.g_iKeySwitch_CurrentFrame;
-
-		g_iKeySwitch_Stats[client][0][0] = x.g_iKeySwitch_Stats_0_0;
-		g_iKeySwitch_Stats[client][0][1] = x.g_iKeySwitch_Stats_0_1;
-		g_iKeySwitch_Stats[client][1][0] = x.g_iKeySwitch_Stats_1_0;
-		g_iKeySwitch_Stats[client][1][1] = x.g_iKeySwitch_Stats_1_1;
-		g_iKeySwitch_Stats[client][2][0] = x.g_iKeySwitch_Stats_2_0;
-		g_iKeySwitch_Stats[client][2][1] = x.g_iKeySwitch_Stats_2_1;
-
-		g_bKeySwitch_IsRecorded[client][0] = x.g_bKeySwitch_IsRecorded_0;
-		g_bKeySwitch_IsRecorded[client][1] = x.g_bKeySwitch_IsRecorded_1;
-
-		g_iKeySwitch_LastRecordedTick[client] = x.g_iKeySwitch_LastRecordedTick;
-		g_iIllegalTurn[client] = x.g_iIllegalTurn;
-		g_iIllegalTurn_CurrentFrame[client] = x.g_iIllegalTurn_CurrentFrame;
-		g_iIllegalTurn_IsTiming[client] = x.g_iIllegalTurn_IsTiming;
-		g_iLastIllegalReason[client] = x.g_iLastIllegalReason;
-		g_iIllegalSidemoveCount[client] = x.g_iIllegalSidemoveCount;
-		g_iLastIllegalSidemoveCount[client] = x.g_iLastIllegalSidemoveCount;
-		g_iLastInvalidButtonCount[client] = x.g_iLastInvalidButtonCount;
-		g_iYawChangeCount[client] = x.g_iYawChangeCount;
 	}
 }
 
 public void OnClientPutInServer(int client)
 {
-	if(!IsValidClient(client) || IsFakeClient(client))
+	if(!IsClientPlayer(client))
 		return;
 
 	SDKHook(client, SDKHook_Touch, Hook_OnTouch);
@@ -938,69 +758,6 @@ public void OnClientDisconnect(int client)
 	{
 		fuck_sourcemod x;
 		x.accountid = GetSteamAccountID(client);
-
-		x.g_iRealButtons = g_iRealButtons[client];
-		x.g_iButtons = g_iButtons[client];
-		x.g_iLastButtons = g_iButtons[client];
-
-		x.g_iLastPressTick_0 = g_iLastPressTick[client][0];
-		x.g_iLastPressTick_1 = g_iLastPressTick[client][1];
-		x.g_iLastPressTick_2 = g_iLastPressTick[client][2];
-		x.g_iLastPressTick_3 = g_iLastPressTick[client][3];
-
-		x.g_iLastPressTick_Recorded_0 = g_iLastPressTick_Recorded[client][0];
-		x.g_iLastPressTick_Recorded_1 = g_iLastPressTick_Recorded[client][1];
-		x.g_iLastPressTick_Recorded_2 = g_iLastPressTick_Recorded[client][2];
-		x.g_iLastPressTick_Recorded_3 = g_iLastPressTick_Recorded[client][3];
-
-		x.g_iLastPressTick_Recorded_KS_0 = g_iLastPressTick_Recorded_KS[client][0];
-		x.g_iLastPressTick_Recorded_KS_1 = g_iLastPressTick_Recorded_KS[client][1];
-		x.g_iLastPressTick_Recorded_KS_2 = g_iLastPressTick_Recorded_KS[client][2];
-		x.g_iLastPressTick_Recorded_KS_3 = g_iLastPressTick_Recorded_KS[client][3];
-
-		x.g_iKeyPressesThisStrafe = g_iKeyPressesThisStrafe[client];
-
-		x.g_iLastReleaseTick_0 = g_iLastReleaseTick[client][0];
-		x.g_iLastReleaseTick_1 = g_iLastReleaseTick[client][1];
-		x.g_iLastReleaseTick_2 = g_iLastReleaseTick[client][2];
-		x.g_iLastReleaseTick_3 = g_iLastReleaseTick[client][3];
-
-		x.g_iLastReleaseTick_Recorded_0 = g_iLastReleaseTick_Recorded[client][0];
-		x.g_iLastReleaseTick_Recorded_1 = g_iLastReleaseTick_Recorded[client][1];
-		x.g_iLastReleaseTick_Recorded_2 = g_iLastReleaseTick_Recorded[client][2];
-		x.g_iLastReleaseTick_Recorded_3 = g_iLastReleaseTick_Recorded[client][3];
-
-		x.g_iLastReleaseTick_Recorded_KS_0 = g_iLastReleaseTick_Recorded_KS[client][0];
-		x.g_iLastReleaseTick_Recorded_KS_1 = g_iLastReleaseTick_Recorded_KS[client][1];
-		x.g_iLastReleaseTick_Recorded_KS_2 = g_iLastReleaseTick_Recorded_KS[client][2];
-		x.g_iLastReleaseTick_Recorded_KS_3 = g_iLastReleaseTick_Recorded_KS[client][3];
-
-		x.g_fLastMove = g_fLastMove[client];
-		x.g_iLastTurnDir = g_iLastTurnDir[client];
-		x.g_iLastTurnTick = g_iLastTurnTick[client];
-		x.g_iLastTurnTick_Recorded_StartStrafe = g_iLastTurnTick_Recorded_StartStrafe[client];
-		x.g_iLastTurnTick_Recorded_EndStrafe = g_iLastTurnTick_Recorded_EndStrafe[client];
-		x.g_iLastStopTurnTick = g_iLastStopTurnTick[client];
-		x.g_bIsTurning = g_bIsTurning[client];
-		x.g_iReleaseTickAtLastEndStrafe = g_iReleaseTickAtLastEndStrafe[client];
-		x.g_fLastAngles = g_fLastAngles[client];
-		x.g_InvalidButtonSidemoveCount = g_InvalidButtonSidemoveCount[client];
-		x.g_iCmdNum = g_iCmdNum[client];
-		x.g_fLastPosition = g_fLastPosition[client];
-		x.g_iLastTeleportTick = g_iLastTeleportTick[client];
-		x.g_fAngleDifference = g_fAngleDifference[client];
-		x.g_fLastAngleDifference = g_fLastAngleDifference[client];
-
-		x.g_strafeTick = g_strafeTick[client];
-		x.g_flRawGain = g_flRawGain[client];
-		x.g_bTouchesWall = g_bTouchesWall[client];
-		x.g_iJump = g_iJump[client];
-		x.g_iTicksOnGround = g_iTicksOnGround[client];
-		x.g_iYawSpeed = g_iYawSpeed[client];
-		x.g_iYawTickCount = g_iYawTickCount[client];
-		x.g_iTimingTickCount = g_iTimingTickCount[client];
-		x.g_iStrafesDone = g_iStrafesDone[client];
-		x.g_bFirstSixJumps = g_bFirstSixJumps[client];
 
 		x.g_iStartStrafe_CurrentFrame = g_iStartStrafe_CurrentFrame[client];
 
@@ -1033,27 +790,6 @@ public void OnClientDisconnect(int client)
 		x.g_iEndStrafe_LastTickDifference = g_iEndStrafe_LastTickDifference[client];
 		x.g_bEndStrafe_IsRecorded = g_bEndStrafe_IsRecorded[client];
 		x.g_iEndStrafe_IdenticalCount = g_iEndStrafe_IdenticalCount[client];
-		x.g_iKeySwitch_CurrentFrame = g_iKeySwitch_CurrentFrame[client];
-
-		x.g_iKeySwitch_Stats_0_0 = g_iKeySwitch_Stats[client][0][0];
-		x.g_iKeySwitch_Stats_0_1 = g_iKeySwitch_Stats[client][0][1];
-		x.g_iKeySwitch_Stats_1_0 = g_iKeySwitch_Stats[client][1][0];
-		x.g_iKeySwitch_Stats_1_1 = g_iKeySwitch_Stats[client][1][1];
-		x.g_iKeySwitch_Stats_2_0 = g_iKeySwitch_Stats[client][2][0];
-		x.g_iKeySwitch_Stats_2_1 = g_iKeySwitch_Stats[client][2][1];
-
-		x.g_bKeySwitch_IsRecorded_0 = g_bKeySwitch_IsRecorded[client][0];
-		x.g_bKeySwitch_IsRecorded_1 = g_bKeySwitch_IsRecorded[client][1];
-
-		x.g_iKeySwitch_LastRecordedTick = g_iKeySwitch_LastRecordedTick[client];
-		x.g_iIllegalTurn = g_iIllegalTurn[client];
-		x.g_iIllegalTurn_CurrentFrame = g_iIllegalTurn_CurrentFrame[client];
-		x.g_iIllegalTurn_IsTiming = g_iIllegalTurn_IsTiming[client];
-		x.g_iLastIllegalReason = g_iLastIllegalReason[client];
-		x.g_iIllegalSidemoveCount = g_iIllegalSidemoveCount[client];
-		x.g_iLastIllegalSidemoveCount = g_iLastIllegalSidemoveCount[client];
-		x.g_iLastInvalidButtonCount = g_iLastInvalidButtonCount[client];
-		x.g_iYawChangeCount = g_iYawChangeCount[client];
 
 		g_aPersistentData.PushArray(x);
 	}
@@ -1075,6 +811,9 @@ public Action Hook_GroundFlags(int entity, const char[] PropName, int &iValue, i
 
 void QueryForCvars(int client)
 {
+	if(IsClientPlayer(client, true)) {
+		return;
+	}
 	if(g_Engine == Engine_CSS) QueryClientConVar(client, "cl_yawspeed", OnYawSpeedRetrieved);
 	QueryClientConVar(client, "m_yaw", OnYawRetrieved);
 	QueryClientConVar(client, "m_filter", OnFilterRetrieved);
@@ -1092,7 +831,7 @@ void QueryForCvars(int client)
 
 public void OnYawSpeedRetrieved(QueryCookie cookie, int client, ConVarQueryResult result, const char[] cvarName, const char[] cvarValue)
 {
-	if(!cookie) {
+	if(!cookie || !IsClientPlayer(client)) {
 		return;
 	}
 	g_iYawSpeed[client] = StringToFloat(cvarValue);
@@ -1105,7 +844,7 @@ public void OnYawSpeedRetrieved(QueryCookie cookie, int client, ConVarQueryResul
 
 public void OnYawRetrieved(QueryCookie cookie, int client, ConVarQueryResult result, const char[] cvarName, const char[] cvarValue)
 {
-	if(!cookie) {
+	if(!cookie || !IsClientPlayer(client)) {
 		return;
 	}
 	float mYaw = StringToFloat(cvarValue);
@@ -1125,7 +864,7 @@ public void OnYawRetrieved(QueryCookie cookie, int client, ConVarQueryResult res
 
 public void OnFilterRetrieved(QueryCookie cookie, int client, ConVarQueryResult result, const char[] cvarName, const char[] cvarValue)
 {
-	if(!cookie) {
+	if(!cookie || !IsClientPlayer(client)) {
 		return;
 	}
 	bool mFilter = (0.0 <= StringToFloat(cvarValue) < 1.0)?false:true;
@@ -1145,7 +884,7 @@ public void OnFilterRetrieved(QueryCookie cookie, int client, ConVarQueryResult 
 
 public void OnCustomAccelRetrieved(QueryCookie cookie, int client, ConVarQueryResult result, const char[] cvarName, const char[] cvarValue)
 {
-	if(!cookie) {
+	if(!cookie || !IsClientPlayer(client)) {
 		return;
 	}
 	int mCustomAccel = StringToInt(cvarValue);
@@ -1166,7 +905,7 @@ public void OnCustomAccelRetrieved(QueryCookie cookie, int client, ConVarQueryRe
 
 public void OnCustomAccelMaxRetrieved(QueryCookie cookie, int client, ConVarQueryResult result, const char[] cvarName, const char[] cvarValue)
 {
-	if(!cookie) {
+	if(!cookie || !IsClientPlayer(client)) {
 		return;
 	}
 	float mCustomAccelMax = StringToFloat(cvarValue);
@@ -1187,7 +926,7 @@ public void OnCustomAccelMaxRetrieved(QueryCookie cookie, int client, ConVarQuer
 
 public void OnCustomAccelScaleRetrieved(QueryCookie cookie, int client, ConVarQueryResult result, const char[] cvarName, const char[] cvarValue)
 {
-	if(!cookie) {
+	if(!cookie || !IsClientPlayer(client)) {
 		return;
 	}
 	float mCustomAccelScale = StringToFloat(cvarValue);
@@ -1208,7 +947,7 @@ public void OnCustomAccelScaleRetrieved(QueryCookie cookie, int client, ConVarQu
 
 public void OnCustomAccelExRetrieved(QueryCookie cookie, int client, ConVarQueryResult result, const char[] cvarName, const char[] cvarValue)
 {
-	if(!cookie) {
+	if(!cookie || !IsClientPlayer(client)) {
 		return;
 	}
 	float mCustomAccelExponent = StringToFloat(cvarValue);
@@ -1229,7 +968,7 @@ public void OnCustomAccelExRetrieved(QueryCookie cookie, int client, ConVarQuery
 
 public void OnRawInputRetrieved(QueryCookie cookie, int client, ConVarQueryResult result, const char[] cvarName, const char[] cvarValue)
 {
-	if(!cookie) {
+	if(!cookie || !IsClientPlayer(client)) {
 		return;
 	}
 	bool mRawInput = (0.0 <= StringToFloat(cvarValue) < 1.0)?false:true;
@@ -1249,7 +988,7 @@ public void OnRawInputRetrieved(QueryCookie cookie, int client, ConVarQueryResul
 
 public void OnSensitivityRetrieved(QueryCookie cookie, int client, ConVarQueryResult result, const char[] cvarName, const char[] cvarValue)
 {
-	if(!cookie) {
+	if(!cookie || !IsClientPlayer(client)) {
 		return;
 	}
 	float sensitivity = StringToFloat(cvarValue);
@@ -1269,7 +1008,7 @@ public void OnSensitivityRetrieved(QueryCookie cookie, int client, ConVarQueryRe
 
 public void OnYawSensitivityRetrieved(QueryCookie cookie, int client, ConVarQueryResult result, const char[] cvarName, const char[] cvarValue)
 {
-	if(!cookie) {
+	if(!cookie || !IsClientPlayer(client)) {
 		return;
 	}
 	float sensitivity = StringToFloat(cvarValue);
@@ -1289,7 +1028,7 @@ public void OnYawSensitivityRetrieved(QueryCookie cookie, int client, ConVarQuer
 
 public void OnZoomSensitivityRetrieved(QueryCookie cookie, int client, ConVarQueryResult result, const char[] cvarName, const char[] cvarValue)
 {
-	if(!cookie) {
+	if(!cookie || !IsClientPlayer(client)) {
 		return;
 	}
 	float sensitivity = StringToFloat(cvarValue);
@@ -1309,7 +1048,7 @@ public void OnZoomSensitivityRetrieved(QueryCookie cookie, int client, ConVarQue
 
 public void OnJoystickRetrieved(QueryCookie cookie, int client, ConVarQueryResult result, const char[] cvarName, const char[] cvarValue)
 {
-	if(!cookie) {
+	if(!cookie || !IsClientPlayer(client)) {
 		return;
 	}
 	bool joyStick = (0.0 <= StringToFloat(cvarValue) < 1.0)?false:true;
@@ -1888,7 +1627,6 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 {
 	if(!IsFakeClient(client) && IsPlayerAlive(client))
 	{
-		g_iRealButtons[client] = buttons;
 		// Update all information this tick
 		bool bCheck = true;
 
@@ -2972,19 +2710,6 @@ void UpdateGains(int client, float vel[3], float angles[3], int buttons)
 	}
 }
 
-bool IsInLeftRight(int client, int buttons)
-{
-	bool isYawing = false;
-	if(buttons & IN_LEFT) isYawing = !isYawing;
-	if(buttons & IN_RIGHT) isYawing = !isYawing;
-	if(!(g_iYawSpeed[client] < 50.0 || isYawing == false))
-	{
-		return true;
-	}
-
-	return false;
-}
-
 float GetGainPercent(int client)
 {
 	if(g_strafeTick[client] == 0)
@@ -3240,6 +2965,12 @@ stock void GetMoveDirectionName(int direction, char[] buffer, int maxlength)
 		FormatEx(buffer, maxlength, "Unknown");
 	}
 }
+
+bool IsClientPlayer(int client, bool bAlive = false)
+{
+	return (client >= 1 && client <= MaxClients && IsClientInGame(client) && !IsFakeClient(client) && !IsClientSourceTV(client) && (!bAlive || IsPlayerAlive(client)));
+}
+
 
 #if !defined TIMER
 
