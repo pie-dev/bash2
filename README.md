@@ -1,5 +1,7 @@
 # BASH 2.0
 
+### [my discord](https://discord.gg/j9nfnjcUVd)
+
 Changelog:
   - console commands do not have permissions required, will make this configurable later
   - remove null logging in general/related cvars
