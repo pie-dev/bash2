@@ -599,7 +599,7 @@ public Action Timer_QueryCvars(Handle timer, any data)
 {
 	for(int iclient = 1; iclient <= MaxClients; iclient++)
 	{
-		if(!IsFakeClient(iclient) && IsClientConnected(iclient))
+		if(IsClientConnected(iclient) && !IsFakeClient(iclient))
 		{
 			QueryForCvars(iclient);
 		}
