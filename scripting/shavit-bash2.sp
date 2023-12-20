@@ -599,7 +599,7 @@ public Action Timer_QueryCvars(Handle timer, any data)
 {
 	for(int iclient = 1; iclient <= MaxClients; iclient++)
 	{
-		if(IsClientPlayer(iclient, true))
+		if(!IsFakeClient(iclient) && IsClientConnected(iclient))
 		{
 			QueryForCvars(iclient);
 		}
@@ -819,7 +819,7 @@ public Action Hook_GroundFlags(int entity, const char[] PropName, int &iValue, i
 
 void QueryForCvars(int client)
 {
-	if(IsClientPlayer(client, true)) {
+	if(IsFakeClient(client) || !IsClientConnected(client)) {
 		return;
 	}
 	if(g_Engine == Engine_CSS) QueryClientConVar(client, "cl_yawspeed", OnYawSpeedRetrieved);
@@ -839,7 +839,7 @@ void QueryForCvars(int client)
 
 public void OnYawSpeedRetrieved(QueryCookie cookie, int client, ConVarQueryResult result, const char[] cvarName, const char[] cvarValue)
 {
-	if(!cookie || !IsClientPlayer(client)) {
+	if(!IsClientPlayer(client)) {
 		return;
 	}
 	g_iYawSpeed[client] = StringToFloat(cvarValue);
@@ -852,7 +852,7 @@ public void OnYawSpeedRetrieved(QueryCookie cookie, int client, ConVarQueryResul
 
 public void OnYawRetrieved(QueryCookie cookie, int client, ConVarQueryResult result, const char[] cvarName, const char[] cvarValue)
 {
-	if(!cookie || !IsClientPlayer(client)) {
+	if(!IsClientPlayer(client)) {
 		return;
 	}
 	float mYaw = StringToFloat(cvarValue);
@@ -872,7 +872,7 @@ public void OnYawRetrieved(QueryCookie cookie, int client, ConVarQueryResult res
 
 public void OnFilterRetrieved(QueryCookie cookie, int client, ConVarQueryResult result, const char[] cvarName, const char[] cvarValue)
 {
-	if(!cookie || !IsClientPlayer(client)) {
+	if(!IsClientPlayer(client)) {
 		return;
 	}
 	bool mFilter = (0.0 <= StringToFloat(cvarValue) < 1.0)?false:true;
@@ -892,7 +892,7 @@ public void OnFilterRetrieved(QueryCookie cookie, int client, ConVarQueryResult 
 
 public void OnCustomAccelRetrieved(QueryCookie cookie, int client, ConVarQueryResult result, const char[] cvarName, const char[] cvarValue)
 {
-	if(!cookie || !IsClientPlayer(client)) {
+	if(!IsClientPlayer(client)) {
 		return;
 	}
 	int mCustomAccel = StringToInt(cvarValue);
@@ -913,7 +913,7 @@ public void OnCustomAccelRetrieved(QueryCookie cookie, int client, ConVarQueryRe
 
 public void OnCustomAccelMaxRetrieved(QueryCookie cookie, int client, ConVarQueryResult result, const char[] cvarName, const char[] cvarValue)
 {
-	if(!cookie || !IsClientPlayer(client)) {
+	if(!IsClientPlayer(client)) {
 		return;
 	}
 	float mCustomAccelMax = StringToFloat(cvarValue);
@@ -934,7 +934,7 @@ public void OnCustomAccelMaxRetrieved(QueryCookie cookie, int client, ConVarQuer
 
 public void OnCustomAccelScaleRetrieved(QueryCookie cookie, int client, ConVarQueryResult result, const char[] cvarName, const char[] cvarValue)
 {
-	if(!cookie || !IsClientPlayer(client)) {
+	if(!IsClientPlayer(client)) {
 		return;
 	}
 	float mCustomAccelScale = StringToFloat(cvarValue);
@@ -955,7 +955,7 @@ public void OnCustomAccelScaleRetrieved(QueryCookie cookie, int client, ConVarQu
 
 public void OnCustomAccelExRetrieved(QueryCookie cookie, int client, ConVarQueryResult result, const char[] cvarName, const char[] cvarValue)
 {
-	if(!cookie || !IsClientPlayer(client)) {
+	if(!IsClientPlayer(client)) {
 		return;
 	}
 	float mCustomAccelExponent = StringToFloat(cvarValue);
@@ -976,7 +976,7 @@ public void OnCustomAccelExRetrieved(QueryCookie cookie, int client, ConVarQuery
 
 public void OnRawInputRetrieved(QueryCookie cookie, int client, ConVarQueryResult result, const char[] cvarName, const char[] cvarValue)
 {
-	if(!cookie || !IsClientPlayer(client)) {
+	if(!IsClientPlayer(client)) {
 		return;
 	}
 	bool mRawInput = (0.0 <= StringToFloat(cvarValue) < 1.0)?false:true;
@@ -996,7 +996,7 @@ public void OnRawInputRetrieved(QueryCookie cookie, int client, ConVarQueryResul
 
 public void OnSensitivityRetrieved(QueryCookie cookie, int client, ConVarQueryResult result, const char[] cvarName, const char[] cvarValue)
 {
-	if(!cookie || !IsClientPlayer(client)) {
+	if(!IsClientPlayer(client)) {
 		return;
 	}
 	float sensitivity = StringToFloat(cvarValue);
@@ -1016,7 +1016,7 @@ public void OnSensitivityRetrieved(QueryCookie cookie, int client, ConVarQueryRe
 
 public void OnYawSensitivityRetrieved(QueryCookie cookie, int client, ConVarQueryResult result, const char[] cvarName, const char[] cvarValue)
 {
-	if(!cookie || !IsClientPlayer(client)) {
+	if(!IsClientPlayer(client)) {
 		return;
 	}
 	float sensitivity = StringToFloat(cvarValue);
@@ -1036,7 +1036,7 @@ public void OnYawSensitivityRetrieved(QueryCookie cookie, int client, ConVarQuer
 
 public void OnZoomSensitivityRetrieved(QueryCookie cookie, int client, ConVarQueryResult result, const char[] cvarName, const char[] cvarValue)
 {
-	if(!cookie || !IsClientPlayer(client)) {
+	if(!IsClientPlayer(client)) {
 		return;
 	}
 	float sensitivity = StringToFloat(cvarValue);
@@ -1056,7 +1056,7 @@ public void OnZoomSensitivityRetrieved(QueryCookie cookie, int client, ConVarQue
 
 public void OnJoystickRetrieved(QueryCookie cookie, int client, ConVarQueryResult result, const char[] cvarName, const char[] cvarValue)
 {
-	if(!cookie || !IsClientPlayer(client)) {
+	if(!IsClientPlayer(client)) {
 		return;
 	}
 	bool joyStick = (0.0 <= StringToFloat(cvarValue) < 1.0)?false:true;
