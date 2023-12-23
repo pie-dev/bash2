@@ -37,13 +37,13 @@ bash_persistent_data - Saves and reload strafe stats on player rejoin.
 ```
 bash_discord_webhook - The url for the Discord webhook.
 bash_discord_only_bans - Only send ban messages and no logs.
+bash_discord_use_embeds - Send embed messages.
 ```
 
 ## Depencenies (for bash discord)
 
-* [smjannson](https://github.com/davenonymous/SMJansson/tree/master/bin)
-* [discord api](https://forums.alliedmods.net/showthread.php?t=292448)
-* [steamworks](https://github.com/KyleSanderson/SteamWorks)
+* [SteamWorks](https://forums.alliedmods.net/showthread.php?t=229556)
+* [sm-json](https://github.com/doug919/smjson) (only for compiling)
 
 ## Anticheat bypass
 
