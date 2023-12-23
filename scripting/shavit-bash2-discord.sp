@@ -1,22 +1,20 @@
-#include <sourcemod>
-
 #include <bash2>
-#include <ripext>
+#include <json>
+#include <SteamWorks>
 
 #pragma newdecls required
 #pragma semicolon 1
 
 ConVar gCV_Webhook;
 ConVar gCV_OnlyBans;
-ConVar gCV_IgnoreNulls;
 ConVar gCV_UseEmbeds;
 
 public Plugin myinfo =
 {
 	name = "[BASH] Discord",
-	author = "xwidow/nimmy",
+	author = "Eric",
 	description = "",
-	version = "1.0.0",
+	version = "1.1.0",
 	url = "https://github.com/Nimmy2222/bash2"
 };
 
@@ -24,7 +22,6 @@ public void OnPluginStart()
 {
 	gCV_Webhook = CreateConVar("bash_discord_webhook", "", "Discord webhook.", FCVAR_PROTECTED);
 	gCV_OnlyBans = CreateConVar("bash_discord_only_bans", "0", "Only send ban messages and no logs.", _, true, 0.0, true, 1.0);
-	gCV_IgnoreNulls = CreateConVar("bash_discord_ignore_nulls", "1", "Don't send null logs.", _, true, 0.0, true, 1.0);
 	gCV_UseEmbeds = CreateConVar("bash_discord_use_embeds", "1", "Send embed messages.", _, true, 0.0, true, 1.0);
 	AutoExecConfig(true, "bash-discord", "sourcemod");
 }
@@ -32,11 +29,6 @@ public void OnPluginStart()
 public void Bash_OnDetection(int client, char[] buffer)
 {
 	if (gCV_OnlyBans.BoolValue)
-	{
-		return;
-	}
-
-	if (gCV_IgnoreNulls.BoolValue && StrContains(buffer, "nullPct") != -1)
 	{
 		return;
 	}
@@ -81,40 +73,35 @@ void FormatEmbedMessage(int client, char[] buffer)
 	// https://discord.com/developers/docs/resources/channel#embed-object
 	// https://discord.com/developers/docs/resources/channel#embed-object-embed-field-structure
 	// https://discord.com/developers/docs/resources/webhook#webhook-object-jsonform-params
-	JSONObject playerField = new JSONObject();
+	JSON_Object playerField = new JSON_Object();
 	playerField.SetString("name", "Player");
 	playerField.SetString("value", player);
 	playerField.SetBool("inline", true);
 
-	JSONObject eventField = new JSONObject();
+	JSON_Object eventField = new JSON_Object();
 	eventField.SetString("name", "Event");
 	eventField.SetString("value", buffer);
 	eventField.SetBool("inline", true);
 
-	JSONArray fields = new JSONArray();
-	fields.Push(playerField);
-	fields.Push(eventField);
+	JSON_Array fields = new JSON_Array();
+	fields.PushObject(playerField);
+	fields.PushObject(eventField);
 
-	JSONObject embed = new JSONObject();
+	JSON_Object embed = new JSON_Object();
 	embed.SetString("title", hostname);
 	embed.SetString("color", "16720418");
-	embed.Set("fields", fields);
+	embed.SetObject("fields", fields);
 
-	JSONArray embeds = new JSONArray();
-	embeds.Push(embed);
+	JSON_Array embeds = new JSON_Array();
+	embeds.PushObject(embed);
 
-	JSONObject json = new JSONObject();
+	JSON_Object json = new JSON_Object();
 	json.SetString("username", "BASH 2.0");
-	json.Set("embeds", embeds);
+	json.SetObject("embeds", embeds);
 
 	SendMessage(json);
 
-	delete playerField;
-	delete eventField;
-	delete fields;
-	delete embed;
-	delete embeds;
-	delete json;
+	json_cleanup_and_delete(json);
 }
 
 void FormatMessage(int client, char[] buffer)
@@ -135,24 +122,22 @@ void FormatMessage(int client, char[] buffer)
 	// Suppress Discord mentions and embeds.
 	// https://discord.com/developers/docs/resources/channel#allowed-mentions-object
 	// https://discord.com/developers/docs/resources/channel#message-object-message-flags
-	JSONArray parse = new JSONArray();
-	JSONObject allowedMentions = new JSONObject();
-	allowedMentions.Set("parse", parse);
+	JSON_Array parse = new JSON_Array();
+	JSON_Object allowedMentions = new JSON_Object();
+	allowedMentions.SetObject("parse", parse);
 
-	JSONObject json = new JSONObject();
+	JSON_Object json = new JSON_Object();
 	json.SetString("username", hostname);
 	json.SetString("content", content);
-	json.Set("allowed_mentions", allowedMentions);
+	json.SetObject("allowed_mentions", allowedMentions);
 	json.SetInt("flags", 4);
 
 	SendMessage(json);
 
-	delete parse;
-	delete allowedMentions;
-	delete json;
+	json_cleanup_and_delete(json);
 }
 
-void SendMessage(JSONObject json)
+void SendMessage(JSON_Object json)
 {
 	char webhook[256];
 	gCV_Webhook.GetString(webhook, sizeof(webhook));
@@ -163,16 +148,24 @@ void SendMessage(JSONObject json)
 		return;
 	}
 
-	HTTPRequest request = new HTTPRequest(webhook);
-	request.Post(json, OnMessageSent);
+	char body[2048];
+	json.Encode(body, sizeof(body));
+
+	Handle request = SteamWorks_CreateHTTPRequest(k_EHTTPMethodPOST, webhook);
+	SteamWorks_SetHTTPRequestRawPostBody(request, "application/json", body, strlen(body));
+	SteamWorks_SetHTTPRequestAbsoluteTimeoutMS(request, 15000);
+	SteamWorks_SetHTTPCallbacks(request, OnMessageSent);
+	SteamWorks_SendHTTPRequest(request);
 }
 
-public void OnMessageSent(HTTPResponse response, any value, const char[] error)
+public void OnMessageSent(Handle request, bool failure, bool requestSuccessful, EHTTPStatusCode statusCode, DataPack pack)
 {
-	if (response.Status != HTTPStatus_NoContent)
+	if (failure || !requestSuccessful || statusCode != k_EHTTPStatusCode204NoContent)
 	{
-		LogError("Failed to send message to Discord. Response status: %d.", response.Status);
+		LogError("Failed to send message to Discord. Response status: %d.", statusCode);
 	}
+
+	delete request;
 }
 
 void SanitizeName(char[] name)
