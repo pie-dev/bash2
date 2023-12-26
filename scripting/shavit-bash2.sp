@@ -70,6 +70,8 @@ public Plugin myinfo =
 #define DR_WiggleHack (1 << 12) // Almost definitely strafe hack. Check for IN_LEFT/IN_RIGHT
 #define DR_TurningInfraction (1 << 13) // Client turns at impossible speeds
 
+#define BHOP_AVERAGE_TIME_FLOAT 0.74
+
 EngineVersion g_Engine;
 int   g_iButtons[MAXPLAYERS + 1][2];
 int   g_iLastButtons[MAXPLAYERS + 1][2];
@@ -160,6 +162,8 @@ float g_MOTDTestAngles[MAXPLAYERS + 1][3];
 bool  g_bMOTDTest[MAXPLAYERS + 1];
 int   g_iTarget[MAXPLAYERS + 1];
 
+float g_fTickRate;
+
 enum struct fuck_sourcemod
 {
 	int accountid;
@@ -233,6 +237,7 @@ ArrayList g_aPersistentData = null;
 
 public void OnPluginStart()
 {
+	g_fTickRate = (1.0 / GetTickInterval());
 	char sDate[64];
 	FormatTime(sDate, sizeof(sDate), "%y%m%d", GetTime());
 
@@ -497,13 +502,15 @@ public Action Event_PlayerJump(Event event, const char[] name, bool dontBroadcas
 		{
 			if(gainPct > 85.0)
 			{
+				float adjspj = ( ( (g_bFirstSixJumps[iclient] ? 5.0:6.0) * (BHOP_AVERAGE_TIME_FLOAT * g_fTickRate) / g_strafeTick[iclient] ) * spj );
+
 				char sStyle[32];
 				#if defined TIMER
 				int style = Shavit_GetBhopStyle(iclient);
 				Shavit_GetStyleStrings(style, sStyleName, g_sStyleStrings[style].sStyleName, sizeof(stylestrings_t::sStyleName));
 				FormatEx(sStyle, sizeof(sStyle), "%s", g_sStyleStrings[style].sStyleName)
 				#endif
-				AnticheatLog(iclient, "has %.2f％ gains (Yawing %.1f％, Timing: %.1f％, SPJ: %.1f, Style: %s)", gainPct, yawPct, timingPct, spj, sStyle);
+				AnticheatLog(iclient, "has %.2f％ gains (Yawing %.1f％, Timing: %.1f％, SPJ: %.1f, Style: %s)", gainPct, yawPct, timingPct, adjspj, sStyle);
 
 				if(gainPct == 100.0)
 				{
