@@ -365,6 +365,7 @@ stock void PrintToAdmins(const char[] msg, any...)
 		{
 			continue;
 		}
+		Shavit_StopChatSound();
 		Shavit_PrintToChat(i, buffer);
 	}
 }
