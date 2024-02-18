@@ -7,6 +7,7 @@
 #include <shavit>
 #include <clientprefs>
 #include <dhooks>
+
 #undef REQUIRE_EXTENSIONS
 #include <sendproxy>
 
@@ -230,6 +231,7 @@ char g_sPlayerIp[MAXPLAYERS + 1][16];
 
 #if defined TIMER
 stylestrings_t g_sStyleStrings[STYLE_LIMIT];
+chatstrings_t g_csChatStrings;
 bool  g_bIsBeingTimed[MAXPLAYERS +1];
 #endif
 
@@ -237,6 +239,12 @@ ArrayList g_aPersistentData = null;
 
 public void OnPluginStart()
 {
+
+	if(LibraryExists("shavit"))
+	{
+		Shavit_OnChatConfigLoaded();
+	}
+
 	g_fTickRate = (1.0 / GetTickInterval());
 	char sDate[64];
 	FormatTime(sDate, sizeof(sDate), "%y%m%d", GetTime());
@@ -280,6 +288,16 @@ public void OnConfigsExecuted()
 	GetConVarString(g_hBanLength, g_sBanLength, sizeof(g_sBanLength));
 }
 
+public void Shavit_OnChatConfigLoaded()
+{
+	Shavit_GetChatStrings(sMessagePrefix, g_csChatStrings.sPrefix, sizeof(chatstrings_t::sPrefix));
+	Shavit_GetChatStrings(sMessageText, g_csChatStrings.sText, sizeof(chatstrings_t::sText));
+	Shavit_GetChatStrings(sMessageWarning, g_csChatStrings.sWarning, sizeof(chatstrings_t::sWarning));
+	Shavit_GetChatStrings(sMessageVariable, g_csChatStrings.sVariable, sizeof(chatstrings_t::sVariable));
+	Shavit_GetChatStrings(sMessageVariable2, g_csChatStrings.sVariable2, sizeof(chatstrings_t::sVariable2));
+	Shavit_GetChatStrings(sMessageStyle, g_csChatStrings.sStyle, sizeof(chatstrings_t::sStyle));
+}
+
 public void OnBanLengthChanged(ConVar convar, const char[] oldValue, const char[] newValue)
 {
 	strcopy(g_sBanLength, sizeof(g_sBanLength), newValue);
@@ -287,7 +305,6 @@ public void OnBanLengthChanged(ConVar convar, const char[] oldValue, const char[
 
 public void OnAllPluginsLoaded()
 {
-	//g_bTasLoaded = LibraryExists("tas");
 
 	if(g_hTeleport == INVALID_HANDLE && LibraryExists("dhooks"))
 	{
@@ -344,12 +361,11 @@ stock void PrintToAdmins(const char[] msg, any...)
 
 	for (int i = 1; i <= MaxClients; i++)
 	{
-		if(!IsClientPlayer(i)) {
+		if(!IsClientPlayer(i) || !g_bAdminMode[i])
+		{
 			continue;
 		}
-		if(g_bAdminMode[i]) {
-			PrintToChat(i, buffer);
-		}
+		Shavit_PrintToChat(i, buffer);
 	}
 }
 
@@ -400,6 +416,7 @@ void AutoBanPlayer(int client)
 		Call_StartForward(g_fwdOnClientBanned);
 		Call_PushCell(client);
 		Call_Finish();
+		PrintToAdmins("%N has been banned.", client);
 	}
 }
 
@@ -478,8 +495,6 @@ stock void AnticheatLog(int client, const char[] log, any ...)
 	Call_Finish();
 
 	LogToFile(g_aclogfile, "%L<%s> %s", client, g_sPlayerIp[client], buffer);
-
-	PrintToAdmins("%N %s", client, buffer);
 }
 
 public Action Event_PlayerJump(Event event, const char[] name, bool dontBroadcast)
@@ -490,7 +505,6 @@ public Action Event_PlayerJump(Event event, const char[] name, bool dontBroadcas
 	{
 		float gainPct = GetGainPercent(iclient);
 		float yawPct = (float(g_iYawTickCount[iclient]) / float(g_strafeTick[iclient])) * 100.0;
-		float timingPct = (float(g_iTimingTickCount[iclient]) / float(g_strafeTick[iclient])) * 100.0;
 
 		float spj;
 		if(g_bFirstSixJumps[iclient])
@@ -505,12 +519,18 @@ public Action Event_PlayerJump(Event event, const char[] name, bool dontBroadcas
 				float adjspj = ( ( (g_bFirstSixJumps[iclient] ? 5.0:6.0) * (BHOP_AVERAGE_TIME_FLOAT * g_fTickRate) / g_strafeTick[iclient] ) * spj );
 
 				char sStyle[32];
+
 				#if defined TIMER
-				int style = Shavit_GetBhopStyle(iclient);
-				Shavit_GetStyleStrings(style, sStyleName, g_sStyleStrings[style].sStyleName, sizeof(stylestrings_t::sStyleName));
-				FormatEx(sStyle, sizeof(sStyle), "%s", g_sStyleStrings[style].sStyleName)
+					int style = Shavit_GetBhopStyle(iclient);
+					Shavit_GetStyleStrings(style, sStyleName, g_sStyleStrings[style].sStyleName, sizeof(stylestrings_t::sStyleName));
+					FormatEx(sStyle, sizeof(sStyle), "%s", g_sStyleStrings[style].sStyleName);
 				#endif
-				AnticheatLog(iclient, "has %.2f％ gains (Yawing %.1f％, Timing: %.1f％, SPJ: %.1f, Style: %s)", gainPct, yawPct, timingPct, adjspj, sStyle);
+
+				AnticheatLog(iclient, "High Gains: %.2f％ SPJ: %.1f% Turnbinds: %.1f％ Style: %s)", gainPct, adjspj, yawPct, sStyle);
+
+				PrintToAdmins("%s%N %sHigh Gains: %s%.2f% %sSPJ: %s%.1f %sTurnbinds: %s%.1f% %sStyle:%s %s",
+				g_csChatStrings.sWarning, iclient, g_csChatStrings.sText, g_csChatStrings.sVariable, gainPct, g_csChatStrings.sText, g_csChatStrings.sVariable,
+				adjspj, g_csChatStrings.sText, g_csChatStrings.sVariable, yawPct, g_csChatStrings.sText, g_csChatStrings.sVariable, sStyle);
 
 				if(gainPct == 100.0)
 				{
@@ -573,7 +593,7 @@ public void OnMapStart()
 	delete g_aPersistentData;
 	g_aPersistentData = new ArrayList(sizeof(fuck_sourcemod));
 
-	CreateTimer(1.0, Timer_QueryCvars, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
+	CreateTimer(0.25, Timer_QueryCvars, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
 
 	if(g_bLateLoad)
 	{
@@ -596,8 +616,16 @@ public void OnClientCookiesCached(int client)
 	g_bAdminMode[client] = false;
 	char sCookie[8];
 	GetClientCookie(client, g_hEnabledCookie, sCookie, sizeof(sCookie));
+
+	if(sCookie[0] == '\0')
+	{
+		SetClientCookie(client, g_hEnabledCookie, "0");
+		GetClientCookie(client, g_hEnabledCookie, sCookie, sizeof(sCookie));
+	}
+
 	int val = StringToInt(sCookie);
-	if(val) {
+	if(val)
+	{
 		Bash_AdminMode(client, 0);
 	}
 }
@@ -805,7 +833,7 @@ public void OnClientDisconnect(int client)
 		int style = Shavit_GetBhopStyle(client);
 		Shavit_GetStyleStrings(style, sStyleName, g_sStyleStrings[style].sStyleName, sizeof(stylestrings_t::sStyleName));
 		FormatEx(sStyle, sizeof(sStyle), "%s", g_sStyleStrings[style].sStyleName);
-		AnticheatLog(client, ".BAN. start identicals: %i, end identicals: %i, style: %s", g_iLastStart_Identicals[client], g_iLastEnd_Identicals[client], sStyle);
+		AnticheatLog(client, "BANNED Start Identical Strafes: %i End Identical Strafes: %i, style: %s", g_iLastStart_Identicals[client], g_iLastEnd_Identicals[client], sStyle);
 		AutoBanPlayer(client);
 	}
 }
@@ -870,7 +898,7 @@ public void OnYawRetrieved(QueryCookie cookie, int client, ConVarQueryResult res
 
 		if(g_mYawChangedCount[client] > 1)
 		{
-			PrintToAdmins("%N changed their m_yaw ConVar to %.2f", client, mYaw);
+			PrintToAdmins("%N changed their m_yaw ConVar to %.4f", client, mYaw);
 		}
 	}
 
@@ -1692,7 +1720,6 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 				{
 					if(++g_iBadSeconds[client] >= 3)
 					{
-						//PrintToAdmins("%N has had %d bad seconds", client, g_iBadSeconds[client]);
 						SetEntityMoveType(client, MOVETYPE_NONE);
 					}
 				}
@@ -1800,15 +1827,11 @@ void CheckForIllegalTurning(int client, float vel[3])
 	{
 		if(g_iIllegalYawCount[client] > 30 && g_iPlusLeftCount[client] == 0)
 		{
-			AnticheatLog(client, "is turning with illegal yaw values (m_yaw: %f, sens: %f, m_customaccel: %d, count: %d, m_yaw changes: %d, Joystick: %d)", g_mYaw[client], g_Sensitivity[client], g_mCustomAccel[client], g_iIllegalYawCount[client], g_mYawChangedCount[client], g_JoyStick[client]);
+			AnticheatLog(client, "is turning with illegal yaw values (m_yaw: %f, sens: %f, m_customaccel: %d, count: %d, m_yaw changes: %d, Joystick: %d)",
+			g_mYaw[client], g_Sensitivity[client], g_mCustomAccel[client], g_iIllegalYawCount[client], g_mYawChangedCount[client], g_JoyStick[client]);
 
-			char sValues[256];
-			for(int idx; idx < 20; idx++)
-			{
-				Format(sValues, 256, "%s %.3f", sValues, g_fIList[idx]);
-			}
-
-			//AnticheatLog(client, sValues);
+			PrintToAdmins("%s%N %sIllegal Turns (m_yaw: %f, sens: %f, m_customaccel: %d, count: %d, m_yaw changes: %d, Joystick: %d)",
+			g_csChatStrings.sWarning, client, g_csChatStrings.sText, g_mYaw[client], g_Sensitivity[client], g_mCustomAccel[client], g_iIllegalYawCount[client], g_mYawChangedCount[client], g_JoyStick[client]);
 		}
 
 		g_iIllegalYawCount[client] = 0;
@@ -1942,14 +1965,10 @@ void CheckForWOnlyHack(int client)
 	))
 	{
 		g_iIllegalTurn[client][g_iIllegalTurn_CurrentFrame[client]] = true;
-		//PrintToAdmins("%N: %.1f", client, FloatAbs(g_fAngleDifference[client] - g_fLastAngleDifference[client]));
 	}
 	else
 	{
 		g_iIllegalTurn[client][g_iIllegalTurn_CurrentFrame[client]] = false;
-		//char sTurn[32];
-		//GetTurnDirectionName(g_iLastTurnDir[client], sTurn, sizeof(sTurn));
-		//PrintToAdmins("No: Diff: %.1f, Btn: %d, Gain: %.1f", FloatAbs(g_fAngleDifference[client] - g_fLastAngleDifference[client]), g_iButtons[client][BT_Move] & (1 << GetOppositeButton(GetDesiredButton(client, g_iLastTurnDir[client]))), GetGainPercent(client));
 	}
 
 	#if defined TIMER
@@ -1981,17 +2000,16 @@ void CheckForWOnlyHack(int client)
 		if(illegalPct > 0.6)
 		{
 
-			#if defined TIMER
 			char sStyle[32];
-			int style = Shavit_GetBhopStyle(client);
-			Shavit_GetStyleStrings(style, sStyleName, g_sStyleStrings[style].sStyleName, sizeof(stylestrings_t::sStyleName));
-			FormatEx(sStyle, sizeof(sStyle), "%s", g_sStyleStrings[style].sStyleName)
-			AnticheatLog(client, "angle snap hack, Pct: %.2f％, Timing: %.1f％, Style: %s", illegalPct * 100.0, timingPct * 100.0, sStyle);
+			#if defined TIMER
+				int style = Shavit_GetBhopStyle(client);
+				Shavit_GetStyleStrings(style, sStyleName, g_sStyleStrings[style].sStyleName, sizeof(stylestrings_t::sStyleName));
+				FormatEx(sStyle, sizeof(sStyle), ", Style: %s", g_sStyleStrings[style].sStyleName)
 			#endif
 
-			#if !defined TIMER
-			AnticheatLog(client, "angle snap hack, Pct: %.2f％, Timing: %.1f％", illegalPct * 100.0, timingPct * 100.0);
-			#endif
+			AnticheatLog(client, "angle snap hack, Pct: %.2f％, Timing: %.1f％%s", illegalPct * 100.0, timingPct * 100.0, sStyle);
+
+			PrintToAdmins("%s%N Angle Snap Pct: %.2f% Style: %s", g_csChatStrings.sWarning, client, illegalPct * 100.0, sStyle);
 		}
 	}
 
@@ -2230,9 +2248,14 @@ stock void RecordStartStrafe(int client, int button, int turnDir, const char[] c
 			int style = Shavit_GetBhopStyle(client);
 			Shavit_GetStyleStrings(style, sStyleName, g_sStyleStrings[style].sStyleName, sizeof(stylestrings_t::sStyleName));
 			FormatEx(sStyle, sizeof(sStyle), "%s", g_sStyleStrings[style].sStyleName);
-			AnticheatLog(client, "way too many %i start strafes in a row (%d) style: %s", g_iStartStrafe_LastTickDifference[client], g_iStartStrafe_IdenticalCount[client], sStyle);
+			AnticheatLog(client, "Way too many %i start strafes %d (Style: %s)",
+			g_iStartStrafe_LastTickDifference[client], g_iStartStrafe_IdenticalCount[client], sStyle);
+
+			PrintToAdmins("%s%N %sWay too many %i start strafes %i (Style: %s)",
+			g_csChatStrings.sWarning, client, g_csChatStrings.sText, g_iStartStrafe_LastTickDifference[client], g_iStartStrafe_IdenticalCount[client], sStyle);
 		}
-		if(g_iStartStrafe_IdenticalCount[client] > g_iLastStart_Identicals[client]) {
+		if(g_iStartStrafe_IdenticalCount[client] > g_iLastStart_Identicals[client])
+		{
 			g_iLastStart_Identicals[client] = g_iStartStrafe_IdenticalCount[client];
 		}
 	}
@@ -2244,7 +2267,10 @@ stock void RecordStartStrafe(int client, int button, int turnDir, const char[] c
 			int style = Shavit_GetBhopStyle(client);
 			Shavit_GetStyleStrings(style, sStyleName, g_sStyleStrings[style].sStyleName, sizeof(stylestrings_t::sStyleName));
 			FormatEx(sStyle, sizeof(sStyle), "%s", g_sStyleStrings[style].sStyleName);
-			AnticheatLog(client, "too many %i start strafes in a row (%d) style: %s", g_iStartStrafe_LastTickDifference[client], g_iStartStrafe_IdenticalCount[client], sStyle);
+			AnticheatLog(client, "Too many %i start strafes %d (Style: %s)", g_iStartStrafe_LastTickDifference[client], g_iStartStrafe_IdenticalCount[client], sStyle);
+
+			PrintToAdmins("%s%N %sToo many %i start strafes %i (Style: %s)",
+			g_csChatStrings.sWarning, client, g_csChatStrings.sText, g_iStartStrafe_LastTickDifference[client], g_iStartStrafe_IdenticalCount[client], sStyle);
 		}
 
 		g_iStartStrafe_LastTickDifference[client] = g_iStartStrafe_Stats[client][StrafeData_Difference][currFrame];
@@ -2281,24 +2307,19 @@ stock void RecordStartStrafe(int client, int button, int turnDir, const char[] c
 
 		if(sd < 0.8 && sd > g_hDevBan.FloatValue && !toomany)
 		{
-			AnticheatLog(client, "start strafe, avg: %.2f, dev: %.2f, style: %s", mean, sd, sStyle);
-		} else if (sd <= g_hDevBan.FloatValue || toomany) {
-			AnticheatLog(client, ".BAN. start dev: %.2f, identicals: %i, style: %s", sd, g_iLastStart_Identicals[client], sStyle);
+			AnticheatLog(client, "Low Start Dev: %.2f Average Offset: %.2f Style: %s", sd, mean, sStyle);
+
+			PrintToAdmins("%s%N %sLow Start Dev: %s%.2f %sAverage Offset: %s%.2f %sStyle: %s%s",
+			g_csChatStrings.sWarning, client, g_csChatStrings.sText, g_csChatStrings.sVariable, sd, g_csChatStrings.sText, g_csChatStrings.sVariable, mean, g_csChatStrings.sText,
+			g_csChatStrings.sVariable, sStyle);
+		}
+		else if (sd <= g_hDevBan.FloatValue || toomany)
+		{
+			AnticheatLog(client, "BAN start dev: %.2f, identicals: %i, style: %s", sd, g_iLastStart_Identicals[client], sStyle);
 			AutoBanPlayer(client);
 			g_iLastStart_Identicals[client] = 0;
 		}
 	}
-
-	//char sOutput[128], sButton[16], sTurn[16], sMove[16];
-	//GetTurnDirectionName(turnDir, sTurn, sizeof(sTurn));
-	//GetMoveDirectionName(button, sButton, sizeof(sButton));
-	//GetMoveDirectionName(moveDir, sMove, sizeof(sMove));
-
-	//PrintToAdmins("Turned %s | Pressed %s | Moving %s | Difference %d",
-	//	sTurn,
-	//	sButton,
-	//	sMove,
-	//	g_iStartStrafe_Stats[client][StrafeData_Difference][currFrame]);
 }
 
 stock void RecordEndStrafe(int client, int button, int turnDir, const char[] caller)
@@ -2337,7 +2358,10 @@ stock void RecordEndStrafe(int client, int button, int turnDir, const char[] cal
 			int style = Shavit_GetBhopStyle(client);
 			Shavit_GetStyleStrings(style, sStyleName, g_sStyleStrings[style].sStyleName, sizeof(stylestrings_t::sStyleName));
 			FormatEx(sStyle, sizeof(sStyle), "%s", g_sStyleStrings[style].sStyleName)
-			AnticheatLog(client, "way too many %i end strafes in a row (%i) style: %s", g_iEndStrafe_LastTickDifference[client], g_iEndStrafe_IdenticalCount[client], sStyle);
+			AnticheatLog(client, "Way too many %i end strafes %i (Style: %s)", g_iEndStrafe_LastTickDifference[client], g_iEndStrafe_IdenticalCount[client], sStyle);
+
+			PrintToAdmins("%s%N %sWay too many %i end strafes %i (Style: %s)",
+			g_csChatStrings.sWarning, client, g_csChatStrings.sText, g_iEndStrafe_LastTickDifference[client], g_iEndStrafe_IdenticalCount[client], sStyle);
 		}
 		if(g_iEndStrafe_IdenticalCount[client] > g_iLastEnd_Identicals[client]) {
 			g_iLastEnd_Identicals[client] = g_iEndStrafe_IdenticalCount[client];
@@ -2351,7 +2375,10 @@ stock void RecordEndStrafe(int client, int button, int turnDir, const char[] cal
 			int style = Shavit_GetBhopStyle(client);
 			Shavit_GetStyleStrings(style, sStyleName, g_sStyleStrings[style].sStyleName, sizeof(stylestrings_t::sStyleName));
 			FormatEx(sStyle, sizeof(sStyle), "%s", g_sStyleStrings[style].sStyleName)
-			AnticheatLog(client, "too many %i end strafes in a row (%i) style: %s", g_iEndStrafe_LastTickDifference[client], g_iEndStrafe_IdenticalCount[client], sStyle);
+			AnticheatLog(client, "Too many %i end strafes %i (Style: %s)", g_iEndStrafe_LastTickDifference[client], g_iEndStrafe_IdenticalCount[client], sStyle);
+
+			PrintToAdmins("%s%N %sToo many %i end strafes %i (Style: %s)",
+			g_csChatStrings.sWarning, client, g_csChatStrings.sText, g_iEndStrafe_LastTickDifference[client], g_iEndStrafe_IdenticalCount[client], sStyle);
 		}
 
 		g_iEndStrafe_LastTickDifference[client] = g_iEndStrafe_Stats[client][StrafeData_Difference][currFrame];
@@ -2388,29 +2415,19 @@ stock void RecordEndStrafe(int client, int button, int turnDir, const char[] cal
 
 		if(sd < 0.8 && sd > g_hDevBan.FloatValue && !toomany)
 		{
-			AnticheatLog(client, "end strafe, avg: %.2f, dev: %.2f, style: %s", mean, sd, sStyle);
+			AnticheatLog(client, "Low End Dev: %.2f Average Offset: %.2f Style: %s", sd, mean, sStyle);
+
+			PrintToAdmins("%s%N %sLow End Dev: %s%.2f %sAverage Offset: %s%.2f %sStyle: %s%s",
+			g_csChatStrings.sWarning, client, g_csChatStrings.sText, g_csChatStrings.sVariable, sd, g_csChatStrings.sText, g_csChatStrings.sVariable, mean, g_csChatStrings.sText,
+			g_csChatStrings.sVariable, sStyle);
+
 		} else if(sd <= g_hDevBan.FloatValue || toomany) {
 			AnticheatLog(client, ".BAN. end dev: %.2f, identicals: %i style: %s", sd, g_iLastEnd_Identicals[client], sStyle);
 			AutoBanPlayer(client);
 			g_iLastEnd_Identicals[client] = 0;
  		}
 	}
-	/*
-	char sButton[16], sTurn[16], sMove[16];
-	GetTurnDirectionName(turnDir, sTurn, sizeof(sTurn));
-	GetMoveDirectionName(button, sButton, sizeof(sButton));
-	GetMoveDirectionName(moveDir, sMove, sizeof(sMove));
 
-	PrintToAdmins("Turn %s | Press %s | Moving %s | Dif %d | %s",
-		sTurn,
-		sButton,
-		sMove,
-		g_iEndStrafe_Stats[client][StrafeData_Difference][currFrame],
-		caller);
-	*/
-
-	// Check key press count
-	//PrintToChat(client, "%d", g_iKeyPressesThisStrafe[client][BT_Move]);
 	g_iKeyPressesThisStrafe[client][BT_Move] = 0;
 	g_iKeyPressesThisStrafe[client][BT_Key]  = 0;
 }
@@ -2486,6 +2503,9 @@ void CheckForIllegalMovement(int client, float vel[3], int buttons)
 	if(g_InvalidButtonSidemoveCount[client] == 0 && g_iLastInvalidButtonCount[client] >= 10)
 	{
 		AnticheatLog(client, "has invalid buttons and sidemove combination %d %d", g_iLastIllegalReason[client], g_InvalidButtonSidemoveCount[client]);
+
+		PrintToAdmins("%s%N %shas invalid buttons and sidemove %d %d",
+		g_csChatStrings.sWarning, client, g_csChatStrings.sText, g_iLastIllegalReason[client], g_InvalidButtonSidemoveCount[client]);
 	}
 
 	/*
@@ -2556,6 +2576,9 @@ void CheckForIllegalMovement(int client, float vel[3], int buttons)
 			}
 
 			AnticheatLog(client, "has invalid consecutive movement values, (Joystick = %d, YawChanges = %d/%d) - %s", g_JoyStick[client], g_iYawChangeCount[client], g_iLastIllegalSidemoveCount[client], bBan?"BAN":"SUSPECT");
+
+			PrintToAdmins("%s%N %sInvalid Movement Values JoyStick = %d YawChanges = %d/%d - %s",
+			g_csChatStrings.sWarning, client, g_csChatStrings.sText, g_JoyStick[client], g_iYawChangeCount[client], g_iLastIllegalSidemoveCount[client], bBan ? "BAN":"SUSPECT");
 		}
 
 		g_iYawChangeCount[client] = 0;
