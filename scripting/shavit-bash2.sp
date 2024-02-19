@@ -7,6 +7,7 @@
 #include <shavit>
 #include <clientprefs>
 #include <dhooks>
+#include "colors.sp"
 
 #undef REQUIRE_EXTENSIONS
 #include <sendproxy>
@@ -71,7 +72,7 @@ public Plugin myinfo =
 #define DR_WiggleHack (1 << 12) // Almost definitely strafe hack. Check for IN_LEFT/IN_RIGHT
 #define DR_TurningInfraction (1 << 13) // Client turns at impossible speeds
 
-#define BHOP_AVERAGE_TIME_FLOAT 0.74
+#define BHOP_AVERAGE_TIME_FLOAT 0.75
 
 EngineVersion g_Engine;
 int   g_iButtons[MAXPLAYERS + 1][2];
@@ -527,10 +528,49 @@ public Action Event_PlayerJump(Event event, const char[] name, bool dontBroadcas
 					FormatEx(sStyle, sizeof(sStyle), "%s", g_sStyleStrings[style].sStyleName);
 				#endif
 
-				AnticheatLog(iclient, "High Gains: %.2f％ SPJ: %.1f% Turnbinds: %.1f％ Style: %s)", gainPct, adjspj, yawPct, sStyle);
+				int color = Green;
 
-				PrintToAdmins("%s%N %sHigh Gains: %s%.2f% %sSPJ: %s%.1f %sTurnbinds: %s%.1f% %sStyle:%s %s",
-				g_csChatStrings.sWarning, iclient, g_csChatStrings.sText, g_csChatStrings.sVariable, gainPct, g_csChatStrings.sText, g_csChatStrings.sVariable,
+				if(gainPct >= 90.0 && adjspj >= 3.0)
+				{
+					color = Red;
+				}
+				else if(adjspj >= 4.5)
+				{
+					color = Red;
+				}
+				else if(gainPct >= 90.0 && adjspj >= 2.0)
+				{
+					color = Cyan;
+				}
+				else if(adjspj >= 3.5)
+				{
+					color = Cyan;
+				}
+				else if(spj <= 1.5 && gainPct <= 90.0)
+				{
+					color = Yellow;
+				}
+
+				char gainAdjective[56];
+				Format(gainAdjective, sizeof(gainAdjective), "Decent");
+
+				if(color == Red)
+				{
+					Format(gainAdjective, sizeof(gainAdjective), "SUSPICIOUS");
+				}
+				else if(color == Cyan)
+				{
+					Format(gainAdjective, sizeof(gainAdjective), "Insane");
+				}
+				else if(color == Green)
+				{
+					Format(gainAdjective, sizeof(gainAdjective), "High");
+				}
+
+				AnticheatLog(iclient, "%s Gains: %.2f％ SPJ: %.1f% Turnbinds: %.1f％ Style: %s)", gainAdjective, gainPct, adjspj, yawPct, sStyle);
+
+				PrintToAdmins("%s%N %s%s Gains: %s%.2f% %sSPJ: %s%.1f %sTurnbinds: %s%.1f% %sStyle:%s %s",
+				g_csChatStrings.sWarning, iclient, g_csChatStrings.sText, gainAdjective, g_sBstatColorsHex[color], gainPct, g_csChatStrings.sText, g_csChatStrings.sVariable,
 				adjspj, g_csChatStrings.sText, g_csChatStrings.sVariable, yawPct, g_csChatStrings.sText, g_csChatStrings.sVariable, sStyle);
 
 				if(gainPct == 100.0)
@@ -2308,10 +2348,27 @@ stock void RecordStartStrafe(int client, int button, int turnDir, const char[] c
 
 		if(sd < 0.8 && sd > g_hDevBan.FloatValue && !toomany)
 		{
-			AnticheatLog(client, "Low Start Dev: %.2f Average Offset: %.2f Style: %s", sd, mean, sStyle);
+			char color = Green;
 
-			PrintToAdmins("%s%N %sLow Start Dev: %s%.2f %sAverage Offset: %s%.2f %sStyle: %s%s",
-			g_csChatStrings.sWarning, client, g_csChatStrings.sText, g_csChatStrings.sVariable, sd, g_csChatStrings.sText, g_csChatStrings.sVariable, mean, g_csChatStrings.sText,
+			char devAdjective[52];
+
+			Format(devAdjective, sizeof(devAdjective), "Low");
+
+			if(sd < 0.4)
+			{
+				color = Red;
+				Format(devAdjective, sizeof(devAdjective), "SUSPICIOUS");
+			}
+			if(sd <= 0.5)
+			{
+				color = Cyan;
+				Format(devAdjective, sizeof(devAdjective), "Very Low");
+			}
+
+			AnticheatLog(client, "%s Start Dev: %.2f Average Offset: %.2f Style: %s", devAdjective, sd, mean, sStyle);
+
+			PrintToAdmins("%s%N %s%s Start Dev: %s%.2f %sAverage Offset: %s%.2f %sStyle: %s%s",
+			g_csChatStrings.sWarning, client, g_csChatStrings.sText, devAdjective, g_sBstatColorsHex[color], sd, g_csChatStrings.sText, g_csChatStrings.sVariable, mean, g_csChatStrings.sText,
 			g_csChatStrings.sVariable, sStyle);
 		}
 		else if (sd <= g_hDevBan.FloatValue || toomany)
@@ -2416,10 +2473,27 @@ stock void RecordEndStrafe(int client, int button, int turnDir, const char[] cal
 
 		if(sd < 0.8 && sd > g_hDevBan.FloatValue && !toomany)
 		{
-			AnticheatLog(client, "Low End Dev: %.2f Average Offset: %.2f Style: %s", sd, mean, sStyle);
+			char color = Green;
 
-			PrintToAdmins("%s%N %sLow End Dev: %s%.2f %sAverage Offset: %s%.2f %sStyle: %s%s",
-			g_csChatStrings.sWarning, client, g_csChatStrings.sText, g_csChatStrings.sVariable, sd, g_csChatStrings.sText, g_csChatStrings.sVariable, mean, g_csChatStrings.sText,
+			char devAdjective[52];
+
+			Format(devAdjective, sizeof(devAdjective), "Low");
+
+			if(sd < 0.4)
+			{
+				color = Red;
+				Format(devAdjective, sizeof(devAdjective), "SUSPICIOUS");
+			}
+			if(sd <= 0.5)
+			{
+				color = Cyan;
+				Format(devAdjective, sizeof(devAdjective), "Very Low");
+			}
+
+			AnticheatLog(client, "%s End Dev: %.2f Average Offset: %.2f Style: %s",devAdjective, sd, mean, sStyle);
+
+			PrintToAdmins("%s%N %s%s End Dev: %s%.2f %sAverage Offset: %s%.2f %sStyle: %s%s",
+			g_csChatStrings.sWarning, client, g_csChatStrings.sText, devAdjective, g_sBstatColorsHex[color], sd, g_csChatStrings.sText, g_csChatStrings.sVariable, mean, g_csChatStrings.sText,
 			g_csChatStrings.sVariable, sStyle);
 
 		} else if(sd <= g_hDevBan.FloatValue || toomany) {
