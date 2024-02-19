@@ -166,6 +166,8 @@ int   g_iTarget[MAXPLAYERS + 1];
 
 float g_fTickRate;
 
+char g_sIpCache[MAXPLAYERS + 1][256];
+
 enum struct fuck_sourcemod
 {
 	int accountid;
@@ -413,7 +415,9 @@ void AutoBanPlayer(int client)
 {
 	if(g_hAutoban.BoolValue && IsClientInGame(client) && !IsClientInKickQueue(client))
 	{
-		ServerCommand("sm_ban #%d %s Cheating", GetClientUserId(client), g_sBanLength);
+		//ServerCommand("sm_ban #%d %s Cheating", GetClientUserId(client), g_sBanLength);
+
+		ServerCommand("sm_banip %s %s Cheating", g_sIpCache[client], g_sBanLength);
 
 		Call_StartForward(g_fwdOnClientBanned);
 		Call_PushCell(client);
@@ -826,6 +830,8 @@ public void OnClientPutInServer(int client)
 	}
 	#endif
 	QueryForCvars(client);
+
+	GetClientIP(client, g_sIpCache[client], sizeof(g_sIpCache[]));
 }
 
 public void OnClientDisconnect(int client)
@@ -869,6 +875,7 @@ public void OnClientDisconnect(int client)
 
 		g_aPersistentData.PushArray(x);
 	}
+
 	if(g_iLastStart_Identicals[client] >= g_hIdentificalStrafeBan.IntValue || g_iLastEnd_Identicals[client] >= g_hIdentificalStrafeBan.IntValue) {
 		char sStyle[32];
 		int style = Shavit_GetBhopStyle(client);
