@@ -1,7 +1,5 @@
 # BASH 2.0
 
-### [my discord](https://discord.gg/j9nfnjcUVd)
-
 Changelog:
 * Identical strafe auto ban and dev auto ban configurable in config
 * Delay too many identical strafe auto ban till after 50 strafes have been collected regardless of auto ban number, to not "save" the player from getting a low dev
