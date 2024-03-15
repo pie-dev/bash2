@@ -23,7 +23,7 @@ public Plugin myinfo =
 	author = "Blacky, edited by carnifex/nimmy",
 	description = "Detects strafe hackers",
 	version = "2.0",
-	url = "https://github.com/Nimmy2222/bash2"
+	url = "https://github.com/enimmy/bash2"
 };
 
 // Definitions
@@ -167,6 +167,7 @@ int   g_iTarget[MAXPLAYERS + 1];
 float g_fTickRate;
 
 char g_sIpCache[MAXPLAYERS + 1][256];
+char g_sSteamIdCache[MAXPLAYERS + 1][128];
 
 enum struct fuck_sourcemod
 {
@@ -222,6 +223,7 @@ ConVar g_hDevBan;
 ConVar g_hIdentificalStrafeBan;
 ConVar g_hBashCmdPublic;
 Cookie g_hEnabledCookie;
+ConVar g_hBanIP;
 
 bool g_bAdminMode[MAXPLAYERS + 1];
 //ConVar g_hQueryRate;
@@ -260,11 +262,13 @@ public void OnPluginStart()
 
 	g_hBanLength = CreateConVar("bash_banlength", "0", "Ban length for the automated bans", _, true, 0.0);
 	g_hAutoban = CreateConVar("bash_autoban", "1", "Auto ban players who are detected", _, true, 0.0, true, 1.0);
-	HookConVarChange(g_hBanLength, OnBanLengthChanged);
+	g_hBanIP = CreateConVar("bash_banIPs", "0", "ban players IP address instead of SteamID", _, true, 0.0, true, 1.0);
 	g_hPersistentData = CreateConVar("bash_persistent_data", "1", "Whether to save and reload strafe stats on a map for players when they disconnect.\nThis is useful to prevent people from frequently rejoining to wipe their strafe stats.", _, true, 0.0, true, 1.0);
-	g_hDevBan = CreateConVar("bash_devban", "0.35", "Offset threshold at which to ban a player, 0.0 - 0.8", _, true, 0.0, true, 0.8);
-	g_hIdentificalStrafeBan = CreateConVar("bash_idential_offset_ban", "25", "Threshold to ban player for identical sync offsets 15 - 50", _, true, 15.0, true, 50.0);
+	g_hDevBan = CreateConVar("bash_devban", "0.4", "Offset threshold at which to ban a player, 0.0 - 0.8", _, true, 0.0, true, 0.8);
+	g_hIdentificalStrafeBan = CreateConVar("bash_idential_offset_ban", "20", "Threshold to ban player for identical sync offsets 15 - 50", _, true, 15.0, true, 50.0);
 	g_hBashCmdPublic = CreateConVar("bash_public_command", "1", "if bash command is public 0 or 1");
+
+	HookConVarChange(g_hBanLength, OnBanLengthChanged);
 
 	g_hEnabledCookie = RegClientCookie("bash2_logs_enabled", "if logs are on", CookieAccess_Private);
 
@@ -277,6 +281,8 @@ public void OnPluginStart()
 
 	g_Engine = GetEngineVersion();
 	RegAdminCmd("sm_bash2_test", Bash_Test, ADMFLAG_RCON, "trigger a test message so you can know if webhooks are working :)");
+	RegAdminCmd("sm_bash2_testban", Bash_TestBan, ADMFLAG_RCON, "ban a client using bash autoban function");
+
 	RegConsoleCmd("sm_bash2", Bash_AdminMode, "Opt in/out of admin mode (Prints bash info into chat).");
 	RegConsoleCmd("bash2_stats", Bash_Stats, "Check a player's strafe stats");
 	RegConsoleCmd("bash2_admin", Bash_AdminMode, "Opt in/out of admin mode (Prints bash info into chat).");
@@ -411,18 +417,42 @@ public MRESReturn Hook_DHooks_Teleport(int client, Handle hParams)
 	return MRES_Ignored;
 }
 
-void AutoBanPlayer(int client)
+void AutoBanPlayer(int client, bool disconnected = false)
 {
-	if(g_hAutoban.BoolValue && IsClientInGame(client) && !IsClientInKickQueue(client))
+	if(!g_hAutoban.BoolValue)
 	{
-		//ServerCommand("sm_ban #%d %s Cheating", GetClientUserId(client), g_sBanLength);
+		return;
+	}
 
+	if(!g_hBanIP.BoolValue)
+	{
+		if(disconnected)
+		{
+			ServerCommand("sm_addban %s %s Cheating", g_sBanLength, g_sSteamIdCache[client]);
+		}
+		else
+		{
+			ServerCommand("sm_ban #%d %s Cheating", GetClientUserId(client), g_sBanLength);
+		}
+	}
+	else
+	{
 		ServerCommand("sm_banip %s %s Cheating", g_sIpCache[client], g_sBanLength);
+	}
 
-		Call_StartForward(g_fwdOnClientBanned);
-		Call_PushCell(client);
-		Call_Finish();
+	Call_StartForward(g_fwdOnClientBanned);
+	Call_PushCell(client);
+	Call_Finish();
+
+	if(!disconnected)
+	{
 		PrintToAdmins("%N has been banned.", client);
+		PrintToServer("%N has been banned.", client);
+	}
+	else
+	{
+		PrintToAdmins("Disconnected client %s has been banned.", g_sSteamIdCache[client]);
+		PrintToServer("Disconnected client %s has been banned.", g_sSteamIdCache[client]);
 	}
 }
 
@@ -577,7 +607,7 @@ public Action Event_PlayerJump(Event event, const char[] name, bool dontBroadcas
 				g_csChatStrings.sWarning, iclient, g_csChatStrings.sText, gainAdjective, g_sBstatColorsHex[color], gainPct, g_csChatStrings.sText, g_csChatStrings.sVariable,
 				adjspj, g_csChatStrings.sText, g_csChatStrings.sVariable, yawPct, g_csChatStrings.sText, g_csChatStrings.sVariable, sStyle);
 
-				if(gainPct == 100.0)
+				if(gainPct >= 95.0 || adjspj >= 5.0 || (adjspj >= 4.1 && gainPct > 90.0))
 				{
 					AutoBanPlayer(iclient);
 				}
@@ -649,6 +679,7 @@ public void OnMapStart()
 				OnClientConnected(iclient);
 				OnClientPutInServer(iclient);
 				OnClientCookiesCached(iclient);
+				OnClientAuthorized(iclient, "");
 			}
 		}
 	}
@@ -834,6 +865,11 @@ public void OnClientPutInServer(int client)
 	GetClientIP(client, g_sIpCache[client], sizeof(g_sIpCache[]));
 }
 
+public void OnClientAuthorized(int client, const char[] auth)
+{
+	GetClientAuthId(client, AuthId_Steam3, g_sSteamIdCache[client], sizeof(g_sSteamIdCache[]));
+}
+
 public void OnClientDisconnect(int client)
 {
 	if (GetSteamAccountID(client) != 0 && g_hPersistentData.BoolValue)
@@ -882,7 +918,7 @@ public void OnClientDisconnect(int client)
 		Shavit_GetStyleStrings(style, sStyleName, g_sStyleStrings[style].sStyleName, sizeof(stylestrings_t::sStyleName));
 		FormatEx(sStyle, sizeof(sStyle), "%s", g_sStyleStrings[style].sStyleName);
 		AnticheatLog(client, "BANNED Start Identical Strafes: %i End Identical Strafes: %i, style: %s", g_iLastStart_Identicals[client], g_iLastEnd_Identicals[client], sStyle);
-		AutoBanPlayer(client);
+		AutoBanPlayer(client, true);
 	}
 }
 
@@ -1275,6 +1311,19 @@ public Action Bash_Test(int client, int args)
 		AnticheatLog(client, "bash2_test log. plz ignore :)");
 	}
 
+	return Plugin_Handled;
+}
+
+public Action Bash_TestBan(int client, int args)
+{
+	int target = GetCmdArgInt(1);
+	bool discon = view_as<bool>(GetCmdArgInt(2));
+	PrintToServer("trying on cli %i", target);
+	if(target == 0)
+	{
+		return Plugin_Handled;
+	}
+	AutoBanPlayer(target, discon);
 	return Plugin_Handled;
 }
 
