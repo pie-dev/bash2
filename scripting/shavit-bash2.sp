@@ -4,7 +4,7 @@
 #include <sdktools>
 #include <cstrike>
 #include <sdkhooks>
-#include <shavit>
+#include <shavit/core>
 #include <clientprefs>
 #include <dhooks>
 #include "colors.sp"
