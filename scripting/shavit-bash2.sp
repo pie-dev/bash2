@@ -607,7 +607,7 @@ public Action Event_PlayerJump(Event event, const char[] name, bool dontBroadcas
 				g_csChatStrings.sWarning, iclient, g_csChatStrings.sText, gainAdjective, g_sBstatColorsHex[color], gainPct, g_csChatStrings.sText, g_csChatStrings.sVariable,
 				adjspj, g_csChatStrings.sText, g_csChatStrings.sVariable, yawPct, g_csChatStrings.sText, g_csChatStrings.sVariable, sStyle);
 
-				if(gainPct >= 95.0 || adjspj >= 5.0 || (adjspj >= 4.1 && gainPct > 90.0))
+				if((gainPct >= 95.0 && yawPct < 60.0) || adjspj >= 5.0 || (adjspj >= 4.1 && gainPct > 90.0))
 				{
 					AutoBanPlayer(iclient);
 				}
