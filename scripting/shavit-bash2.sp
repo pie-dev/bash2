@@ -13,7 +13,7 @@
 #undef REQUIRE_EXTENSIONS
 #include <SteamWorks>
 
-bool g_bDiscordEnabled = false;
+bool g_bSteamWorks = false;
 
 public Plugin myinfo =
 {
@@ -103,6 +103,9 @@ float g_fAngleDifference[MAXPLAYERS + 1][2];
 float g_fLastAngleDifference[MAXPLAYERS + 1][2];
 bool g_bAwaitingBan[MAXPLAYERS + 1] = {false, ...};
 
+bool g_bInSafeGroup[MAXPLAYERS + 1] = {false, ...};
+
+
 
 // Gain calculation
 int   g_strafeTick[MAXPLAYERS + 1];
@@ -120,7 +123,7 @@ bool  g_bFirstSixJumps[MAXPLAYERS + 1];
 // Optimizer detection
 bool g_bTouchesFuncRotating[MAXPLAYERS + 1];
 
-// Mouse cvars
+// Mouse settings
 float g_mYaw[MAXPLAYERS + 1]; int g_mYawChangedCount[MAXPLAYERS + 1]; int g_mYawCheckedCount[MAXPLAYERS + 1];
 bool  g_mFilter[MAXPLAYERS + 1]; int g_mFilterChangedCount[MAXPLAYERS + 1]; int g_mFilterCheckedCount[MAXPLAYERS + 1];
 int   g_mCustomAccel[MAXPLAYERS + 1]; int g_mCustomAccelChangedCount[MAXPLAYERS + 1]; int g_mCustomAccelCheckedCount[MAXPLAYERS + 1];
@@ -225,10 +228,12 @@ ConVar g_hIdentificalStrafeBan;
 ConVar g_hBashCmdPublic;
 Cookie g_hEnabledCookie;
 ConVar g_hBanIP;
+ConVar g_hSafeGroup;
 
-ConVar gCV_Webhook;
-ConVar gCV_OnlyBans;
-ConVar gCV_UseEmbeds;
+ConVar g_hMainWebhook;
+ConVar g_hAlertWebhook;
+ConVar g_hOnlySendBans;
+ConVar g_hUseDiscordEmbeds;
 
 bool g_bAdminMode[MAXPLAYERS + 1];
 //ConVar g_hQueryRate;
@@ -259,9 +264,7 @@ public void OnPluginStart()
 
 	BuildPath(Path_SM, g_aclogfile, PLATFORM_MAX_PATH, "logs/ac_%s.txt", sDate);
 
-	UserMsg umVGUIMenu = GetUserMessageId("VGUIMenu");
-	if (umVGUIMenu == INVALID_MESSAGE_ID)
-		SetFailState("UserMsg `umVGUIMenu` not found!");
+	//Cvar Marker
 
 	g_hBanLength = CreateConVar("bash_banlength", "0", "Ban length for the automated bans", _, true, 0.0);
 	g_hAutoban = CreateConVar("bash_autoban", "1", "Auto ban players who are detected", _, true, 0.0, true, 1.0);
@@ -269,12 +272,13 @@ public void OnPluginStart()
 	g_hPersistentData = CreateConVar("bash_persistent_data", "1", "Whether to save and reload strafe stats on a map for players when they disconnect.\nThis is useful to prevent people from frequently rejoining to wipe their strafe stats.", _, true, 0.0, true, 1.0);
 	g_hDevBan = CreateConVar("bash_devban", "0.4", "Offset threshold at which to ban a player, 0.0 - 0.8", _, true, 0.0, true, 0.8);
 	g_hIdentificalStrafeBan = CreateConVar("bash_idential_offset_ban", "20", "Threshold to ban player for identical sync offsets 15 - 50", _, true, 15.0, true, 50.0);
-	g_hBashCmdPublic = CreateConVar("bash_public_command", "1", "if bash command is public 0 or 1");
+	g_hBashCmdPublic = CreateConVar("bash_public_command", "1", "if bash command is public 0 or 1", _, true, 0.0, true, 1.0);
+	g_hSafeGroup = CreateConVar("bash_safe_group", "", "(Requires SteamWorks) Steam group ID of players that shouldn't be autobanned no matter what.");
 
-	//discord
-	gCV_Webhook = CreateConVar("bash_discord_webhook", "", "Discord webhook.", FCVAR_PROTECTED);
-	gCV_OnlyBans = CreateConVar("bash_discord_only_bans", "0", "Only send ban messages and no logs.", _, true, 0.0, true, 1.0);
-	gCV_UseEmbeds = CreateConVar("bash_discord_use_embeds", "1", "Send embed messages.", _, true, 0.0, true, 1.0);
+	g_hMainWebhook = CreateConVar("bash_discord_webhook", "", "(Requires SteamWorks) Discord webhook.", FCVAR_PROTECTED);
+	g_hAlertWebhook = CreateConVar("bash_discord_alert_webhook", "", "Webhook for highly suspicious logs, so admins can turn on notifications for only these logs.");
+	g_hOnlySendBans = CreateConVar("bash_discord_only_bans", "0", "Only send ban messages and no logs.", _, true, 0.0, true, 1.0);
+	g_hUseDiscordEmbeds = CreateConVar("bash_discord_use_embeds", "1", "Send embed messages.", _, true, 0.0, true, 1.0);
 
 	HookConVarChange(g_hBanLength, OnBanLengthChanged);
 
@@ -326,7 +330,7 @@ public void OnAllPluginsLoaded()
 		Initialize();
 		g_bDhooksLoaded = true;
 	}
-	g_bDiscordEnabled = LibraryExists("SteamWorks");
+	g_bSteamWorks= LibraryExists("SteamWorks");
 }
 
 public void OnLibraryAdded(const char[] name)
@@ -337,7 +341,7 @@ public void OnLibraryAdded(const char[] name)
 		g_bDhooksLoaded = true;
 	}
 
-	g_bDiscordEnabled = LibraryExists("SteamWorks");
+	g_bSteamWorks= LibraryExists("SteamWorks");
 }
 
 public void OnLibraryRemoved(const char[] name)
@@ -347,7 +351,7 @@ public void OnLibraryRemoved(const char[] name)
 		g_bDhooksLoaded = false;
 	}
 
-	g_bDiscordEnabled = LibraryExists("SteamWorks");
+	g_bSteamWorks = LibraryExists("SteamWorks");
 }
 
 stock void PrintToAdmins(const char[] msg, any...)
@@ -407,8 +411,15 @@ public MRESReturn Hook_DHooks_Teleport(int client, Handle hParams)
 void AutoBanPlayer(int client, bool disconnected = false)
 {
 	g_bAwaitingBan[client] = false;
+
 	if(!g_hAutoban.BoolValue)
 	{
+		return;
+	}
+
+	if(g_bInSafeGroup[client])
+	{
+		AnticheatLog(client, false, "is in safe group, aborting ban.");
 		return;
 	}
 
@@ -508,10 +519,10 @@ void SaveOldLogs()
 	DeleteFile(sPath);
 }
 
-stock void AnticheatLog(int client, const char[] log, any ...)
+stock void AnticheatLog(int client, bool alert, const char[] log, any ...)
 {
 	char buffer[1024];
-	VFormat(buffer, sizeof(buffer), log, 3);
+	VFormat(buffer, sizeof(buffer), log, 4);
 
 	Call_StartForward(g_fwdOnDetection);
 	Call_PushCell(client);
@@ -520,23 +531,23 @@ stock void AnticheatLog(int client, const char[] log, any ...)
 
 	LogToFile(g_aclogfile, "%L<%s> %s", client, g_sPlayerIp[client], buffer);
 
-	if(!g_bDiscordEnabled)
+	if(!g_bSteamWorks)
 	{
 		return;
 	}
 
-	if (gCV_OnlyBans.BoolValue)
+	if (g_hOnlySendBans.BoolValue)
 	{
 		return;
 	}
 
-	if (gCV_UseEmbeds.BoolValue)
+	if (g_hUseDiscordEmbeds.BoolValue)
 	{
-		FormatEmbedMessage(client, buffer);
+		FormatEmbedMessage(client, buffer, alert);
 	}
 	else
 	{
-		FormatMessage(client, buffer);
+		FormatMessage(client, buffer, alert);
 	}
 
 }
@@ -810,6 +821,13 @@ public void OnClientPutInServer(int client)
 public void OnClientAuthorized(int client, const char[] auth)
 {
 	GetClientAuthId(client, AuthId_Steam3, g_sSteamIdCache[client], sizeof(g_sSteamIdCache[]));
+
+	g_bInSafeGroup[client] = false;
+
+	char groupID[16];
+	g_hSafeGroup.GetString(groupID, sizeof(groupID));
+
+	SteamWorks_GetUserGroupStatus(client, StringToInt(groupID));
 }
 
 public void OnClientDisconnect(int client)
@@ -1236,7 +1254,7 @@ public Action Bash_Test(int client, int args)
 	}
 	else
 	{
-		AnticheatLog(client, "bash2_test log. plz ignore :)");
+		AnticheatLog(client, true, "bash2_test log. plz ignore :)");
 	}
 
 	return Plugin_Handled;
@@ -2527,18 +2545,19 @@ void ProcessGainLog(int client, float gain, float spj, float yawwing)
 		color = Yellow;
 	}
 
-	PrintToAdmins("%s%N %s%s Gains: %s%.2f% %sSPJ: %s%.1f %sTurnbinds: %s%.1f% %sStyle:%s %s",
+	PrintToAdmins("%s%N %s%s Gains: %s%.2f% %s | SPJ: %s%.1f %s | Turnbinds: %s%.1f% %s | Style:%s %s",
 	g_csChatStrings.sVariable, client, g_csChatStrings.sText, gainAdj, g_sBstatColorsHex[color], gain, g_csChatStrings.sText, g_csChatStrings.sVariable,
 	spj, g_csChatStrings.sText, g_csChatStrings.sVariable, yawwing, g_csChatStrings.sText, g_csChatStrings.sVariable, sStyle);
 
 	char map[56];
 	GetCurrentMap(map, sizeof(map));
 
-	AnticheatLog(client, "%s Gains: %.2f％ SPJ: %.1f% Turnbinds: %.1f％ Style: %s Map: %s)", gainAdj, gain, spj, yawwing, sStyle, map);
+	AnticheatLog(client, false, "%s Gains: %.2f％ SPJ: %.1f% Turnbinds: %.1f％ Style: %s Map: %s", gainAdj, gain, spj, yawwing, sStyle, map);
 
 	if((gain >= 95.0 && yawwing < 60.0) || spj >= 5.0 || (spj >= 4.1 && gain > 90.0))
 	{
 		AutoBanPlayer(client);
+		AnticheatLog(client, true, "Banned for suspicious gains");
 	}
 }
 
@@ -2549,7 +2568,7 @@ void ProcessAngleSnap(int client, float illegalPct, float timingPct)
 	Shavit_GetStyleStrings(style, sStyleName, g_sStyleStrings[style].sStyleName, sizeof(stylestrings_t::sStyleName));
 	FormatEx(sStyle, sizeof(sStyle), "%s", g_sStyleStrings[style].sStyleName)
 
-	AnticheatLog(client, "Angle Snap Pct: %.2f％ Timing: %.1f％ Style: %s Sens: %f Yaw: %f",
+	AnticheatLog(client, false, "Angle Snap Pct: %.2f％ Timing: %.1f％ Style: %s Sens: %f Yaw: %f",
 	illegalPct * 100.0, timingPct * 100.0, sStyle, g_Sensitivity[client], g_mYaw[client]);
 
 	PrintToAdmins("%s%N Angle Snap Pct: %.2f% Timing: %.1f% Style: %s Sens: %.4f Yaw: %.4f",
@@ -2588,15 +2607,15 @@ void ProcessLowDev(int client, float dev, float mean, bool start)
 		color = Yellow;
 	}
 
-	AnticheatLog(client, "%s %sDev: %.2f Average: %.2f Style: %s", devAdjective, start ? "Start":"End", dev, mean, sStyle);
+	AnticheatLog(client, false, "%s %sDev: %.2f Avg: %.2f Style: %s", devAdjective, start ? "Start":"End", dev, mean, sStyle);
 
-	PrintToAdmins("%s%N %s%s %s Dev: %s%.2f %sAverage: %s%.2f %sStyle: %s%s",
+	PrintToAdmins("%s%N %s%s %s Dev: %s%.2f %s| Avg: %s%.2f %s| Style: %s%s",
 	g_csChatStrings.sVariable, client, g_csChatStrings.sText, devAdjective, start ? "Start":"End", g_sBstatColorsHex[color], dev, g_csChatStrings.sText, g_csChatStrings.sVariable, mean, g_csChatStrings.sText,
 	g_csChatStrings.sVariable, sStyle);
 
 	if(dev <= g_hDevBan.FloatValue)
 	{
-		AnticheatLog(client, "BAN Dev: %.2f Average: %.2f Style %s", dev, mean, sStyle);
+		AnticheatLog(client, true, "BAN Dev: %.2f Average: %.2f Style %s", dev, mean, sStyle);
 		AutoBanPlayer(client);
 	}
 }
@@ -2615,7 +2634,7 @@ void ProcessTooManyIdenticals(int client, int offset, int identicals, bool start
 		g_csChatStrings.sVariable, client, g_csChatStrings.sText, g_csChatStrings.sVariable, offset, g_csChatStrings.sText,
 		g_csChatStrings.sVariable, identicals, g_csChatStrings.sText, sStyle);
 
-		AnticheatLog(client, "Too many %i start strafes %d Style: %s", offset, identicals, sStyle);
+		AnticheatLog(client, true, "Too many %i start strafes %d Style: %s", offset, identicals, sStyle);
 	}
 	else
 	{
@@ -2623,12 +2642,12 @@ void ProcessTooManyIdenticals(int client, int offset, int identicals, bool start
 		g_csChatStrings.sVariable, client, g_csChatStrings.sText, g_csChatStrings.sVariable, offset, g_csChatStrings.sText,
 		g_csChatStrings.sVariable, identicals, g_csChatStrings.sText, sStyle);
 
-		AnticheatLog(client, "Too many %i end strafes %d Style: %s", offset, identicals, sStyle);
+		AnticheatLog(client, true, "Too many %i end strafes %d Style: %s", offset, identicals, sStyle);
 	}
 
 	if(identicals >= g_hIdentificalStrafeBan.IntValue)
 	{
-		AnticheatLog(client, "BAN %i Identical %i %s Strafes Style: %s", identicals, offset, start?"Start":"End", style);
+		AnticheatLog(client, true, "BAN %i Identical %i %s Strafes Style: %s", identicals, offset, (start ? "Start":"End"), sStyle);
 
 		if(disconnected)
 		{
@@ -2643,7 +2662,7 @@ void ProcessTooManyIdenticals(int client, int offset, int identicals, bool start
 
 void ProcessIllegalAngles(int client)
 {
-	AnticheatLog(client, "is turning with illegal yaw values (m_yaw: %f, sens: %f, m_customaccel: %d, count: %d, m_yaw changes: %d, Joystick: %d)",
+	AnticheatLog(client, false, "is turning with illegal yaw values (m_yaw: %f, sens: %f, m_customaccel: %d, count: %d, m_yaw changes: %d, Joystick: %d)",
 	g_mYaw[client], g_Sensitivity[client], g_mCustomAccel[client], g_iIllegalYawCount[client], g_mYawChangedCount[client], g_JoyStick[client]);
 
 	PrintToAdmins("%s%N %sIllegal Turns (m_yaw: %f, sens: %f, m_customaccel: %d, count: %d, m_yaw changes: %d, Joystick: %d)",
@@ -2654,7 +2673,7 @@ void ProcessIllegalMovementValues(int client, bool invalidCombination, bool impo
 {
 	if(!invalidCombination)
 	{
-		AnticheatLog(client, "has invalid consecutive movement values, (Joystick = %d, YawChanges = %d/%d) - %s",
+		AnticheatLog(client, false, "has invalid consecutive movement values, (Joystick = %d, YawChanges = %d/%d) - %s",
 		g_JoyStick[client], g_iYawChangeCount[client], g_iLastIllegalSidemoveCount[client], impossibleSidemove ? "BAN":"SUSPECT");
 
 		PrintToAdmins("%s%N %sInvalid Movement Values JoyStick = %d YawChanges = %d/%d - %s",
@@ -2662,7 +2681,7 @@ void ProcessIllegalMovementValues(int client, bool invalidCombination, bool impo
 	}
 	else
 	{
-		AnticheatLog(client, "has invalid buttons and sidemove combination %d %d", g_iLastIllegalReason[client], g_InvalidButtonSidemoveCount[client]);
+		AnticheatLog(client, false, "has invalid buttons and sidemove combination %d %d", g_iLastIllegalReason[client], g_InvalidButtonSidemoveCount[client]);
 
 		PrintToAdmins("%s%N %shas invalid buttons and sidemove %d %d",
 		g_csChatStrings.sVariable, client, g_csChatStrings.sText, g_iLastIllegalReason[client], g_InvalidButtonSidemoveCount[client]);
@@ -3089,7 +3108,7 @@ bool IsClientPlayer(int client, bool bAlive = false)
 	return (client >= 1 && client <= MaxClients && IsClientInGame(client) && !IsFakeClient(client) && !IsClientSourceTV(client) && (!bAlive || IsPlayerAlive(client)));
 }
 
-void FormatEmbedMessage(int client, char[] buffer)
+void FormatEmbedMessage(int client, char[] buffer, bool alert)
 {
 	char hostname[128];
 	FindConVar("hostname").GetString(hostname, sizeof(hostname));
@@ -3133,12 +3152,12 @@ void FormatEmbedMessage(int client, char[] buffer)
 	json.SetString("username", "BASH 2.0");
 	json.SetObject("embeds", embeds);
 
-	SendMessage(json);
+	SendMessage(json, alert);
 
 	json_cleanup_and_delete(json);
 }
 
-void FormatMessage(int client, char[] buffer)
+void FormatMessage(int client, char[] buffer, bool alert)
 {
 	char hostname[128];
 	FindConVar("hostname").GetString(hostname, sizeof(hostname));
@@ -3166,15 +3185,15 @@ void FormatMessage(int client, char[] buffer)
 	json.SetObject("allowed_mentions", allowedMentions);
 	json.SetInt("flags", 4);
 
-	SendMessage(json);
+	SendMessage(json, alert);
 
 	json_cleanup_and_delete(json);
 }
 
-void SendMessage(JSON_Object json)
+void SendMessage(JSON_Object json, bool alert)
 {
 	char webhook[256];
-	gCV_Webhook.GetString(webhook, sizeof(webhook));
+	g_hMainWebhook.GetString(webhook, sizeof(webhook));
 
 	if (webhook[0] == '\0')
 	{
@@ -3190,6 +3209,24 @@ void SendMessage(JSON_Object json)
 	SteamWorks_SetHTTPRequestAbsoluteTimeoutMS(request, 15000);
 	SteamWorks_SetHTTPCallbacks(request, OnMessageSent);
 	SteamWorks_SendHTTPRequest(request);
+
+	if(!alert)
+	{
+		return;
+	}
+
+	g_hAlertWebhook.GetString(webhook, sizeof(webhook));
+	if (webhook[0] == '\0')
+	{
+		LogError("Discord alerting webhook is not set.");
+		return;
+	}
+
+	Handle alertRequest = SteamWorks_CreateHTTPRequest(k_EHTTPMethodPOST, webhook);
+	SteamWorks_SetHTTPRequestRawPostBody(alertRequest, "application/json", body, strlen(body));
+	SteamWorks_SetHTTPRequestAbsoluteTimeoutMS(alertRequest, 15000);
+	SteamWorks_SetHTTPCallbacks(alertRequest, OnMessageSent);
+	SteamWorks_SendHTTPRequest(alertRequest);
 }
 
 public void OnMessageSent(Handle request, bool failure, bool requestSuccessful, EHTTPStatusCode statusCode, DataPack pack)
@@ -3208,4 +3245,32 @@ void SanitizeName(char[] name)
 	ReplaceString(name, MAX_NAME_LENGTH, ")", "", false);
 	ReplaceString(name, MAX_NAME_LENGTH, "]", "", false);
 	ReplaceString(name, MAX_NAME_LENGTH, "[", "", false);
+}
+
+//groupstuff
+
+public int SteamWorks_OnClientGroupStatus(int accountID, int groupID, bool isMember, bool isOfficer)
+{
+	int client = GetClientFromAccountID(accountID);
+	if (client == -1)
+	{
+		return;
+	}
+
+	g_bInSafeGroup[client] = isMember;
+}
+
+int GetClientFromAccountID(int accountID)
+{
+	for (int i = 1; i <= MaxClients; i++)
+	{
+		if (IsClientConnected(i))
+		{
+			if (GetSteamAccountID(i) == accountID)
+			{
+				return i;
+			}
+		}
+	}
+	return -1;
 }
