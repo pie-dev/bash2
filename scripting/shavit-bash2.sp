@@ -223,13 +223,15 @@ Handle g_fwdOnClientBanned;
 ConVar g_hBanLength;
 char   g_sBanLength[32];
 ConVar g_hAutoban;
+ConVar g_hAutobanSafeGroup;
 ConVar g_hDevBan;
 ConVar g_hIdentificalStrafeBan;
 ConVar g_hBashCmdPublic;
 Cookie g_hEnabledCookie;
 ConVar g_hBanIP;
 ConVar g_hSafeGroup;
-
+ConVar g_hIdentificalStrafeBanSafeGroup;
+ConVar g_hDevBanSafeGroup;
 ConVar g_hMainWebhook;
 ConVar g_hAlertWebhook;
 ConVar g_hOnlySendBans;
@@ -266,17 +268,23 @@ public void OnPluginStart()
 
 	//Cvar Marker
 
-	g_hBanLength = CreateConVar("bash_banlength", "0", "Ban length for the automated bans", _, true, 0.0);
 	g_hAutoban = CreateConVar("bash_autoban", "1", "Auto ban players who are detected", _, true, 0.0, true, 1.0);
-	g_hBanIP = CreateConVar("bash_banIPs", "0", "ban players IP address instead of SteamID", _, true, 0.0, true, 1.0);
-	g_hPersistentData = CreateConVar("bash_persistent_data", "1", "Whether to save and reload strafe stats on a map for players when they disconnect.\nThis is useful to prevent people from frequently rejoining to wipe their strafe stats.", _, true, 0.0, true, 1.0);
-	g_hDevBan = CreateConVar("bash_devban", "0.4", "Offset threshold at which to ban a player, 0.0 - 0.8", _, true, 0.0, true, 0.8);
-	g_hIdentificalStrafeBan = CreateConVar("bash_idential_offset_ban", "20", "Threshold to ban player for identical sync offsets 15 - 50", _, true, 15.0, true, 50.0);
-	g_hBashCmdPublic = CreateConVar("bash_public_command", "1", "if bash command is public 0 or 1", _, true, 0.0, true, 1.0);
-	g_hSafeGroup = CreateConVar("bash_safe_group", "", "(Requires SteamWorks) Steam group ID of players that shouldn't be autobanned no matter what.");
+	g_hAutobanSafeGroup = CreateConVar("bash_autoban_safegroup", "0", "Auto ban players in the safe group who are detected", _, true, 0.0, true, 1.0);
 
-	g_hMainWebhook = CreateConVar("bash_discord_webhook", "", "(Requires SteamWorks) Discord webhook.", FCVAR_PROTECTED);
-	g_hAlertWebhook = CreateConVar("bash_discord_alert_webhook", "", "Webhook for highly suspicious logs, so admins can turn on notifications for only these logs.");
+	g_hBanLength = CreateConVar("bash_ban_length", "0", "Ban length for the automated bans", _, true, 0.0);
+	g_hBanIP = CreateConVar("bash_ban_ip", "0", "ban players IP address instead of SteamID", _, true, 0.0, true, 1.0);
+	g_hDevBan = CreateConVar("bash_ban_dev", "0.4", "Offset threshold at which to ban a player", _, true, 0.0, true, 0.8);
+	g_hIdentificalStrafeBan = CreateConVar("bash_ban_identical", "20", "Threshold to ban player for identical sync offsets", _, true, 15.0, true, 50.0);
+
+	g_hDevBanSafeGroup = CreateConVar("bash_ban_dev_safegroup", "0.35", "Offset threshold at which to ban a player who is in a safe group", _, true, 0.0, true, 0.8);
+	g_hIdentificalStrafeBanSafeGroup = CreateConVar("bash_ban_identical_safegroup", "30", "Threshold to ban player who is in a safe group for identical sync offsets", _, true, 15.0, true, 50.0);
+
+	g_hPersistentData = CreateConVar("bash_cvar_persistent", "1", "Whether to save and reload strafe stats on a map for players when they disconnect.\nThis is useful to prevent people from frequently rejoining to wipe their strafe stats.", _, true, 0.0, true, 1.0);
+	g_hBashCmdPublic = CreateConVar("bash_cvar_public", "1", "if bash command is public", _, true, 0.0, true, 1.0);
+	g_hSafeGroup = CreateConVar("bash_cvar_safegroup", "", "(Requires SteamWorks) Steam group ID of your safe group");
+
+	g_hMainWebhook = CreateConVar("bash_discord_hook_main", "", "(Requires SteamWorks) Discord webhook.", FCVAR_PROTECTED);
+	g_hAlertWebhook = CreateConVar("bash_discord_hook_urgent", "", "Webhook for highly suspicious logs, so admins can turn on notifications for only important logs.", FCVAR_PROTECTED);
 	g_hOnlySendBans = CreateConVar("bash_discord_only_bans", "0", "Only send ban messages and no logs.", _, true, 0.0, true, 1.0);
 	g_hUseDiscordEmbeds = CreateConVar("bash_discord_use_embeds", "1", "Send embed messages.", _, true, 0.0, true, 1.0);
 
@@ -417,7 +425,7 @@ void AutoBanPlayer(int client, bool disconnected = false)
 		return;
 	}
 
-	if(g_bInSafeGroup[client])
+	if(g_bInSafeGroup[client] && !g_hAutobanSafeGroup.IntValue)
 	{
 		AnticheatLog(client, false, "is in safe group, aborting ban.");
 		return;
@@ -2545,7 +2553,7 @@ void ProcessGainLog(int client, float gain, float spj, float yawwing)
 		color = Yellow;
 	}
 
-	PrintToAdmins("%s%N %s%s Gains: %s%.2f% %s | SPJ: %s%.1f %s | Turnbinds: %s%.1f% %s | Style:%s %s",
+	PrintToAdmins("%s%N %s%s Gains: %s%.2f% %s| SPJ: %s%.1f %s| Turnbinds: %s%.1f% %s| Style:%s %s",
 	g_csChatStrings.sVariable, client, g_csChatStrings.sText, gainAdj, g_sBstatColorsHex[color], gain, g_csChatStrings.sText, g_csChatStrings.sVariable,
 	spj, g_csChatStrings.sText, g_csChatStrings.sVariable, yawwing, g_csChatStrings.sText, g_csChatStrings.sVariable, sStyle);
 
@@ -2553,6 +2561,11 @@ void ProcessGainLog(int client, float gain, float spj, float yawwing)
 	GetCurrentMap(map, sizeof(map));
 
 	AnticheatLog(client, false, "%s Gains: %.2f％ SPJ: %.1f% Turnbinds: %.1f％ Style: %s Map: %s", gainAdj, gain, spj, yawwing, sStyle, map);
+
+	if(g_bInSafeGroup[client])
+	{
+		return;
+	}
 
 	if((gain >= 95.0 && yawwing < 60.0) || spj >= 5.0 || (spj >= 4.1 && gain > 90.0))
 	{
@@ -2613,11 +2626,19 @@ void ProcessLowDev(int client, float dev, float mean, bool start)
 	g_csChatStrings.sVariable, client, g_csChatStrings.sText, devAdjective, start ? "Start":"End", g_sBstatColorsHex[color], dev, g_csChatStrings.sText, g_csChatStrings.sVariable, mean, g_csChatStrings.sText,
 	g_csChatStrings.sVariable, sStyle);
 
-	if(dev <= g_hDevBan.FloatValue)
+	if(dev > g_hDevBan.FloatValue)
 	{
-		AnticheatLog(client, true, "BAN Dev: %.2f Average: %.2f Style %s", dev, mean, sStyle);
-		AutoBanPlayer(client);
+		return;
 	}
+
+	if(g_bInSafeGroup[client] && dev > g_hDevBanSafeGroup.FloatValue)
+	{
+		AnticheatLog(client, false, "Dev ban aborted by safe group threshold.");
+		return;
+	}
+
+	AnticheatLog(client, true, "BAN Dev: %.2f Average: %.2f Style %s", dev, mean, sStyle);
+	AutoBanPlayer(client);
 }
 
 void ProcessTooManyIdenticals(int client, int offset, int identicals, bool start, bool disconnected)
@@ -2645,18 +2666,26 @@ void ProcessTooManyIdenticals(int client, int offset, int identicals, bool start
 		AnticheatLog(client, true, "Too many %i end strafes %d Style: %s", offset, identicals, sStyle);
 	}
 
-	if(identicals >= g_hIdentificalStrafeBan.IntValue)
+	if(identicals < g_hIdentificalStrafeBan.IntValue)
 	{
-		AnticheatLog(client, true, "BAN %i Identical %i %s Strafes Style: %s", identicals, offset, (start ? "Start":"End"), sStyle);
+		return;
+	}
 
-		if(disconnected)
-		{
-			AutoBanPlayer(client, true)
-		}
-		else
-		{
-			g_bAwaitingBan[client] = true;
-		}
+	if(g_bInSafeGroup[client] && identicals < g_hIdentificalStrafeBanSafeGroup.IntValue)
+	{
+		AnticheatLog(client, false, "Identical ban aborted by safe group threshold.")
+		return;
+	}
+
+	AnticheatLog(client, true, "BAN %i Identical %i %s Strafes Style: %s", identicals, offset, (start ? "Start":"End"), sStyle);
+
+	if(disconnected)
+	{
+		AutoBanPlayer(client, true)
+	}
+	else
+	{
+		g_bAwaitingBan[client] = true;
 	}
 }
 
