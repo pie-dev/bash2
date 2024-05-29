@@ -2617,7 +2617,7 @@ void ProcessLowDev(int client, float dev, float mean, bool start)
 	}
 	else if(dev < 0.70)
 	{
-		color = Yellow;
+		color = Orange;
 	}
 
 	AnticheatLog(client, false, "%s %sDev: %.2f Avg: %.2f Style: %s", devAdjective, start ? "Start":"End", dev, mean, sStyle);
