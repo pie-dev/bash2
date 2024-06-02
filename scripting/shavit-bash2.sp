@@ -145,8 +145,6 @@ int   g_iStartStrafe_LastRecordedTick[MAXPLAYERS + 1];
 int   g_iStartStrafe_LastTickDifference[MAXPLAYERS + 1];
 bool  g_bStartStrafe_IsRecorded[MAXPLAYERS + 1][MAX_FRAMES];
 int   g_iStartStrafe_IdenticalCount[MAXPLAYERS + 1];
-int g_iLastStart_Identicals[MAXPLAYERS + 1];
-int g_iLastEnd_Identicals[MAXPLAYERS + 1];
 int   g_iEndStrafe_CurrentFrame[MAXPLAYERS + 1];
 any   g_iEndStrafe_Stats[MAXPLAYERS + 1][7][MAX_FRAMES];
 int   g_iEndStrafe_LastRecordedTick[MAXPLAYERS + 1];
@@ -194,8 +192,6 @@ enum struct fuck_sourcemod
 	int   g_iStartStrafe_LastTickDifference;
 	bool  g_bStartStrafe_IsRecorded[MAX_FRAMES];
 	int   g_iStartStrafe_IdenticalCount;
-	int g_iLastStart_Identicals;
-	int g_iLastEnd_Identicals;
 	int   g_iEndStrafe_CurrentFrame;
 
 	any   g_iEndStrafe_Stats_0[MAX_FRAMES];
@@ -711,8 +707,6 @@ public void OnClientConnected(int client)
 	g_iEndStrafe_LastTickDifference[client] = 0;
 	g_iStartStrafe_IdenticalCount[client] = 0;
 	g_iEndStrafe_IdenticalCount[client]   = 0;
-	g_iLastStart_Identicals[client] = 0;
-	g_iLastEnd_Identicals[client] = 0;
 
 	g_iYawSpeed[client] = 210.0;
 	g_mYaw[client] = 0.0;
@@ -787,8 +781,6 @@ public void OnClientPostAdminCheck(int client)
 		g_iStartStrafe_LastTickDifference[client] = x.g_iStartStrafe_LastTickDifference;
 		g_bStartStrafe_IsRecorded[client] = x.g_bStartStrafe_IsRecorded;
 		g_iStartStrafe_IdenticalCount[client] = x.g_iStartStrafe_IdenticalCount;
-		g_iLastStart_Identicals[client] = x.g_iLastStart_Identicals;
-		g_iLastEnd_Identicals[client] = x.g_iLastEnd_Identicals;
 
 		g_iEndStrafe_CurrentFrame[client] = x.g_iEndStrafe_CurrentFrame;
 
@@ -859,8 +851,6 @@ public void OnClientDisconnect(int client)
 		x.g_iStartStrafe_LastTickDifference = g_iStartStrafe_LastTickDifference[client];
 		x.g_bStartStrafe_IsRecorded = g_bStartStrafe_IsRecorded[client];
 		x.g_iStartStrafe_IdenticalCount = g_iStartStrafe_IdenticalCount[client];
-		x.g_iLastStart_Identicals = g_iLastStart_Identicals[client];
-		x.g_iLastEnd_Identicals = g_iLastEnd_Identicals[client];
 
 		x.g_iEndStrafe_CurrentFrame = g_iEndStrafe_CurrentFrame[client];
 
@@ -880,12 +870,9 @@ public void OnClientDisconnect(int client)
 		g_aPersistentData.PushArray(x);
 	}
 
-	if(g_iLastStart_Identicals[client] >= g_hIdentificalStrafeBan.IntValue || g_iLastEnd_Identicals[client] >= g_hIdentificalStrafeBan.IntValue)
+	if(g_bAwaitingBan[client])
 	{
-		bool start = g_iLastStart_Identicals[client] >= g_hIdentificalStrafeBan.IntValue;
-
-		ProcessTooManyIdenticals(client, start ? g_iStartStrafe_LastTickDifference[client]:g_iEndStrafe_LastTickDifference[client],
-		start ? g_iLastStart_Identicals[client]: g_iLastEnd_Identicals[client], start, true);
+		AutoBanPlayer(client, true);
 	}
 }
 
@@ -2251,17 +2238,12 @@ stock void RecordStartStrafe(int client, int button, int turnDir, const char[] c
 	if(g_iStartStrafe_Stats[client][StrafeData_Difference][currFrame] == g_iStartStrafe_LastTickDifference[client])
 	{
 		g_iStartStrafe_IdenticalCount[client]++;
-
-		if(g_iStartStrafe_IdenticalCount[client] > g_iLastStart_Identicals[client])
-		{
-			g_iLastStart_Identicals[client] = g_iStartStrafe_IdenticalCount[client];
-		}
 	}
 	else
 	{
 		if (g_iStartStrafe_IdenticalCount[client] >= 15)
 		{
-			ProcessTooManyIdenticals(client, g_iStartStrafe_LastTickDifference[client], g_iStartStrafe_IdenticalCount[client], true, false);
+			ProcessTooManyIdenticals(client, g_iStartStrafe_LastTickDifference[client], g_iStartStrafe_IdenticalCount[client], true);
 		}
 
 		g_iStartStrafe_LastTickDifference[client] = g_iStartStrafe_Stats[client][StrafeData_Difference][currFrame];
@@ -2328,16 +2310,12 @@ stock void RecordEndStrafe(int client, int button, int turnDir, const char[] cal
 	if(g_iEndStrafe_Stats[client][StrafeData_Difference][currFrame] == g_iEndStrafe_LastTickDifference[client])
 	{
 		g_iEndStrafe_IdenticalCount[client]++;
-
-		if(g_iEndStrafe_IdenticalCount[client] > g_iLastEnd_Identicals[client]) {
-			g_iLastEnd_Identicals[client] = g_iEndStrafe_IdenticalCount[client];
-		}
 	}
 	else
 	{
 		if (g_iEndStrafe_IdenticalCount[client] >= 15)
 		{
-			ProcessTooManyIdenticals(client, g_iEndStrafe_LastTickDifference[client], g_iLastEnd_Identicals[client], false, false);
+			ProcessTooManyIdenticals(client, g_iEndStrafe_LastTickDifference[client], g_iEndStrafe_IdenticalCount[client], false);
 		}
 
 		g_iEndStrafe_LastTickDifference[client] = g_iEndStrafe_Stats[client][StrafeData_Difference][currFrame];
@@ -2534,13 +2512,15 @@ void ProcessGainLog(int client, float gain, float spj, float yawwing)
 	FormatEx(sStyle, sizeof(sStyle), "%s", g_sStyleStrings[style].sStyleName);
 
 	int color = Green;
+	bool alert = false;
 	char gainAdj[56];
 	Format(gainAdj, sizeof(gainAdj), "High");
 
-	if((gain >= 90.0 && spj >= 3.0) || spj >= 4.5)
+	if((gain >= 93.0 && yawwing < 60.0) || (gain >= 92.0 && spj >= 1.5) || (gain >= 90.0 && spj >= 3.0) || (gain >= 87.0 && spj >= 4.0))
 	{
 		color = Red;
 		Format(gainAdj, sizeof(gainAdj), "SUSPICIOUS");
+		alert = true;
 	}
 	else if(gain >= 90.0 && spj >= 2.0 || spj >= 3.5)
 	{
@@ -2560,14 +2540,14 @@ void ProcessGainLog(int client, float gain, float spj, float yawwing)
 	char map[56];
 	GetCurrentMap(map, sizeof(map));
 
-	AnticheatLog(client, false, "%s Gains: %.2f％ SPJ: %.1f% Turnbinds: %.1f％ Style: %s Map: %s", gainAdj, gain, spj, yawwing, sStyle, map);
+	AnticheatLog(client, alert, "%s Gains: %.2f％ SPJ: %.1f% Turnbinds: %.1f％ Style: %s Map: %s", gainAdj, gain, spj, yawwing, sStyle, map);
 
 	if(g_bInSafeGroup[client])
 	{
 		return;
 	}
 
-	if((gain >= 95.0 && yawwing < 60.0) || spj >= 5.0 || (spj >= 4.1 && gain > 90.0))
+	if((gain >= 92.0 && yawwing < 60.0) || spj >= 5.0 || (spj >= 4.0 && gain >= 89.0))
 	{
 		AutoBanPlayer(client);
 		AnticheatLog(client, true, "Banned for suspicious gains");
@@ -2599,6 +2579,8 @@ void ProcessLowDev(int client, float dev, float mean, bool start)
 
 	char devAdjective[52];
 
+	bool alert = dev <= g_hDevBan.FloatValue;
+
 	Format(devAdjective, sizeof(devAdjective), "Low");
 
 	if(dev < 0.40)
@@ -2620,7 +2602,7 @@ void ProcessLowDev(int client, float dev, float mean, bool start)
 		color = Orange;
 	}
 
-	AnticheatLog(client, false, "%s %sDev: %.2f Avg: %.2f Style: %s", devAdjective, start ? "Start":"End", dev, mean, sStyle);
+	AnticheatLog(client, alert, "%s %sDev: %.2f Avg: %.2f Style: %s", devAdjective, start ? "Start":"End", dev, mean, sStyle);
 
 	PrintToAdmins("%s%N %s%s %s Dev: %s%.2f %s| Avg: %s%.2f %s| Style: %s%s",
 	g_csChatStrings.sVariable, client, g_csChatStrings.sText, devAdjective, start ? "Start":"End", g_sBstatColorsHex[color], dev, g_csChatStrings.sText, g_csChatStrings.sVariable, mean, g_csChatStrings.sText,
@@ -2633,7 +2615,7 @@ void ProcessLowDev(int client, float dev, float mean, bool start)
 
 	if(g_bInSafeGroup[client] && dev > g_hDevBanSafeGroup.FloatValue)
 	{
-		AnticheatLog(client, false, "Dev ban aborted by safe group threshold.");
+		AnticheatLog(client, true, "Dev ban aborted by safe group threshold.");
 		return;
 	}
 
@@ -2641,7 +2623,7 @@ void ProcessLowDev(int client, float dev, float mean, bool start)
 	AutoBanPlayer(client);
 }
 
-void ProcessTooManyIdenticals(int client, int offset, int identicals, bool start, bool disconnected)
+void ProcessTooManyIdenticals(int client, int offset, int identicals, bool start)
 {
 
 	char sStyle[32];
@@ -2649,13 +2631,15 @@ void ProcessTooManyIdenticals(int client, int offset, int identicals, bool start
 	Shavit_GetStyleStrings(style, sStyleName, g_sStyleStrings[style].sStyleName, sizeof(stylestrings_t::sStyleName));
 	FormatEx(sStyle, sizeof(sStyle), "%s", g_sStyleStrings[style].sStyleName);
 
+	bool alert = identicals >= g_hIdentificalStrafeBan.IntValue;
+
 	if(start)
 	{
 		PrintToAdmins("%s%N %sToo many %s%i %sstart strafes %s%i %sStyle: %s",
 		g_csChatStrings.sVariable, client, g_csChatStrings.sText, g_csChatStrings.sVariable, offset, g_csChatStrings.sText,
 		g_csChatStrings.sVariable, identicals, g_csChatStrings.sText, sStyle);
 
-		AnticheatLog(client, true, "Too many %i start strafes %d Style: %s", offset, identicals, sStyle);
+		AnticheatLog(client, alert, "Too many %i start strafes %d Style: %s", offset, identicals, sStyle);
 	}
 	else
 	{
@@ -2663,7 +2647,7 @@ void ProcessTooManyIdenticals(int client, int offset, int identicals, bool start
 		g_csChatStrings.sVariable, client, g_csChatStrings.sText, g_csChatStrings.sVariable, offset, g_csChatStrings.sText,
 		g_csChatStrings.sVariable, identicals, g_csChatStrings.sText, sStyle);
 
-		AnticheatLog(client, true, "Too many %i end strafes %d Style: %s", offset, identicals, sStyle);
+		AnticheatLog(client, alert, "Too many %i end strafes %d Style: %s", offset, identicals, sStyle);
 	}
 
 	if(identicals < g_hIdentificalStrafeBan.IntValue)
@@ -2673,20 +2657,13 @@ void ProcessTooManyIdenticals(int client, int offset, int identicals, bool start
 
 	if(g_bInSafeGroup[client] && identicals < g_hIdentificalStrafeBanSafeGroup.IntValue)
 	{
-		AnticheatLog(client, false, "Identical ban aborted by safe group threshold.")
+		AnticheatLog(client, true, "Identical ban aborted by safe group threshold.")
 		return;
 	}
 
 	AnticheatLog(client, true, "BAN %i Identical %i %s Strafes Style: %s", identicals, offset, (start ? "Start":"End"), sStyle);
 
-	if(disconnected)
-	{
-		AutoBanPlayer(client, true)
-	}
-	else
-	{
-		g_bAwaitingBan[client] = true;
-	}
+	g_bAwaitingBan[client] = true;
 }
 
 void ProcessIllegalAngles(int client)
