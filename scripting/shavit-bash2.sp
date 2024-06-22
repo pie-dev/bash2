@@ -2547,7 +2547,7 @@ void ProcessGainLog(int client, float gain, float spj, float yawwing)
 		return;
 	}
 
-	if((gain >= 92.0 && yawwing < 60.0) || spj >= 5.0 || (spj >= 4.0 && gain >= 89.0))
+	if((gain >= 93.0 && yawwing < 60.0 && spj >= 1.2) || spj >= 5.0 || (spj >= 4.0 && gain >= 89.0))
 	{
 		AutoBanPlayer(client);
 		AnticheatLog(client, true, "Banned for suspicious gains");
