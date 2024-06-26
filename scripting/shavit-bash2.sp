@@ -2516,7 +2516,7 @@ void ProcessGainLog(int client, float gain, float spj, float yawwing)
 	char gainAdj[56];
 	Format(gainAdj, sizeof(gainAdj), "High");
 
-	if((gain >= 93.0 && yawwing < 60.0) || (gain >= 92.0 && spj >= 1.5) || (gain >= 90.0 && spj >= 3.0) || (gain >= 87.0 && spj >= 4.0))
+	if(spj >= 4.7 || (yawwing <= 30.0 && gain >= 93.0 && spj >= 1.5) || (gain >= 90.0 && spj >= 3.0) || (gain >= 88.0 && spj >= 4.0))
 	{
 		color = Red;
 		Format(gainAdj, sizeof(gainAdj), "SUSPICIOUS");
@@ -2547,7 +2547,7 @@ void ProcessGainLog(int client, float gain, float spj, float yawwing)
 		return;
 	}
 
-	if((gain >= 93.0 && yawwing < 60.0 && spj >= 1.2) || spj >= 5.0 || (spj >= 4.0 && gain >= 89.0))
+	if(alert)
 	{
 		AutoBanPlayer(client);
 		AnticheatLog(client, true, "Banned for suspicious gains");
