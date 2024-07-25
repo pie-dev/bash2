@@ -2586,7 +2586,7 @@ void ProcessLowDev(int client, float dev, float mean, bool start)
 	if(dev < 0.40)
 	{
 		color = White;
-		Format(devAdjective, sizeof(devAdjective), "%sSUSPICIOUS", g_csChatStrings.sWarning);
+		Format(devAdjective, sizeof(devAdjective), "SUSPICIOUS");
 	}
 	else if(dev < 0.50)
 	{
