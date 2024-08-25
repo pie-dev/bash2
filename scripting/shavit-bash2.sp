@@ -297,7 +297,7 @@ public void OnPluginStart()
 	RegAdminCmd("sm_bash2_test", Bash_Test, ADMFLAG_RCON, "trigger a test message so you can know if webhooks are working :)");
 	RegAdminCmd("sm_bash2_testban", Bash_TestBan, ADMFLAG_RCON, "ban a client using bash autoban function");
 
-	RegConsoleCmd("sm_bash2", Bash_AdminMode, "Opt in/out of admin mode (Prints bash info into chat).");
+	RegConsoleCmd("sm_bash2", Bash_Settings, "Open the bash settings menu");
 	RegConsoleCmd("bash2_stats", Bash_Stats, "Check a player's strafe stats");
 	RegConsoleCmd("bash2_admin", Bash_AdminMode, "Opt in/out of admin mode (Prints bash info into chat).");
 
@@ -1151,6 +1151,19 @@ public Action Hook_OnTouch(int client, int entity)
 	return Plugin_Continue;
 }
 
+public Action Bash_Settings(int client, int args)
+{
+	if(!g_hBashCmdPublic.IntValue) {
+		if(!CheckCommandAccess(client, "sm_ban", ADMFLAG_BAN)) {
+			ReplyToCommand(client, "[BASH] You do not have permssions.");
+			return Plugin_Handled;
+		}
+	}
+
+	ShowBashSettings(client)
+	return Plugin_Handled;
+}
+
 public Action Bash_Stats(int client, int args)
 {
 	if(args == 0)
@@ -1266,6 +1279,42 @@ public Action Bash_TestBan(int client, int args)
 	}
 	AutoBanPlayer(target, discon);
 	return Plugin_Handled;
+}
+
+void ShowBashSettings(int client) 
+{
+	Menu menu = new Menu(BashSettings_Menu);
+	menu.SetTitle("[BASH] - Settings");
+
+	menu.AddItem("adminmode",		(g_bAdminMode[client]) ? "[x] Admin mode":"[ ] Admin mode");
+	menu.AddItem("stats",			"Stats");
+
+	menu.Display(client, MENU_TIME_FOREVER);
+}
+
+public int BashSettings_Menu(Menu menu, MenuAction action, int param1, int param2)
+{
+	if(action == MenuAction_Select)
+	{
+		char sInfo[32];
+		menu.GetItem(param2, sInfo, sizeof(sInfo));
+
+		if(StrEqual(sInfo, "adminmode"))
+		{
+			Bash_AdminMode(param1, GetClientUserId(param1));
+			ShowBashSettings(param1);
+		}
+		else if(StrEqual(sInfo, "stats"))
+		{
+			ShowBashStats(param1, GetClientUserId(param1));
+		}
+	}
+
+	if (action & MenuAction_End)
+	{
+		delete menu;
+	}
+	return 0;
 }
 
 void ShowBashStats(int client, int userid)
