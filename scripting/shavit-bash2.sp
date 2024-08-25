@@ -289,7 +289,7 @@ public void OnPluginStart()
 
 	HookConVarChange(g_hBanLength, OnBanLengthChanged);
 
-	g_hDefaultCookies = RegClientCookie("bash2_default", "bash2 defaults", CookieAccess_Protected);
+	g_hDefaultCookies = RegClientCookie("bash2_default", "bash2 defaults", CookieAccess_Private);
 	g_hEnabledCookie = RegClientCookie("bash2_logs_enabled", "if logs are on", CookieAccess_Private);
 	g_hPersonalCookie = RegClientCookie("bash2_logs_personal", "if only your own logs are printed", CookieAccess_Private);
 
