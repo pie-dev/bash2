@@ -1330,7 +1330,10 @@ void ShowBashSettings(int client)
 	menu.SetTitle("[BASH] - Settings");
 
 	menu.AddItem("adminmode",		(g_bAdminMode[client]) ? "[x] Admin mode":"[ ] Admin mode");
-	menu.AddItem("personalmode",		(g_bPersonalMode[client]) ? "[x] Personal logs":"[ ] Personal logs");
+	if(g_bAdminMode[client])
+	{
+		menu.AddItem("personalmode",		(g_bPersonalMode[client]) ? "[x] Personal logs":"[ ] Personal logs");
+	}
 	menu.AddItem("stats",			"Stats");
 
 	menu.Display(client, MENU_TIME_FOREVER);
