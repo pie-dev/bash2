@@ -223,7 +223,9 @@ ConVar g_hAutobanSafeGroup;
 ConVar g_hDevBan;
 ConVar g_hIdentificalStrafeBan;
 ConVar g_hBashCmdPublic;
+Cookie g_hDefaultCookies;
 Cookie g_hEnabledCookie;
+Cookie g_hPersonalCookie;
 ConVar g_hBanIP;
 ConVar g_hSafeGroup;
 ConVar g_hIdentificalStrafeBanSafeGroup;
@@ -234,6 +236,7 @@ ConVar g_hOnlySendBans;
 ConVar g_hUseDiscordEmbeds;
 
 bool g_bAdminMode[MAXPLAYERS + 1];
+bool g_bPersonalMode[MAXPLAYERS + 1];
 //ConVar g_hQueryRate;
 ConVar g_hPersistentData;
 
@@ -286,7 +289,9 @@ public void OnPluginStart()
 
 	HookConVarChange(g_hBanLength, OnBanLengthChanged);
 
+	g_hDefaultCookies = RegClientCookie("bash2_default", "bash2 defaults", CookieAccess_Protected);
 	g_hEnabledCookie = RegClientCookie("bash2_logs_enabled", "if logs are on", CookieAccess_Private);
+	g_hPersonalCookie = RegClientCookie("bash2_logs_personal", "if only your own logs are printed", CookieAccess_Private);
 
 	AutoExecConfig(true, "bash", "sourcemod");
 
@@ -300,6 +305,7 @@ public void OnPluginStart()
 	RegConsoleCmd("sm_bash2", Bash_Settings, "Open the bash settings menu");
 	RegConsoleCmd("bash2_stats", Bash_Stats, "Check a player's strafe stats");
 	RegConsoleCmd("bash2_admin", Bash_AdminMode, "Opt in/out of admin mode (Prints bash info into chat).");
+	RegConsoleCmd("bash2_personal", Bash_PersonalMode, "Opt in/out of personal mode (Prints only YOUR bash info into chat).");
 
 	HookEvent("player_jump", Event_PlayerJump);
 
@@ -651,19 +657,34 @@ public void OnMapStart()
 public void OnClientCookiesCached(int client)
 {
 	g_bAdminMode[client] = false;
+	g_bPersonalMode[client] = false;
+
 	char sCookie[8];
-	GetClientCookie(client, g_hEnabledCookie, sCookie, sizeof(sCookie));
+	int val;
+
+	GetClientCookie(client, g_hDefaultCookies, sCookie, sizeof(sCookie));
 
 	if(sCookie[0] == '\0')
 	{
 		SetClientCookie(client, g_hEnabledCookie, "0");
-		GetClientCookie(client, g_hEnabledCookie, sCookie, sizeof(sCookie));
+		SetClientCookie(client, g_hPersonalCookie, "0");
+		SetClientCookie(client, g_hDefaultCookies, "1");
 	}
 
-	int val = StringToInt(sCookie);
+	GetClientCookie(client, g_hEnabledCookie, sCookie, sizeof(sCookie));
+	val = StringToInt(sCookie);
+
 	if(val)
 	{
 		Bash_AdminMode(client, 0);
+	}
+
+	GetClientCookie(client, g_hPersonalCookie, sCookie, sizeof(sCookie));
+	val = StringToInt(sCookie);
+
+	if(val)
+	{
+		Bash_PersonalMode(client, 0);
 	}
 }
 
@@ -1242,6 +1263,22 @@ public Action Bash_AdminMode(int client, int args)
 	return Plugin_Handled;
 }
 
+public Action Bash_PersonalMode(int client, int args)
+{
+	if(!g_hBashCmdPublic.IntValue) {
+		if(!CheckCommandAccess(client, "sm_ban", ADMFLAG_BAN)) {
+			ReplyToCommand(client, "[BASH] You do not have permssions.");
+			SetClientCookie(client, g_hPersonalCookie, "0");
+
+			return Plugin_Handled;
+		}
+	}
+	g_bPersonalMode[client] = !g_bPersonalMode[client];
+	SetClientCookie(client, g_hPersonalCookie, g_bPersonalMode[client] ? "1":"0");
+	ReplyToCommand(client, "[BASH] Filter personal logs: %s", g_bPersonalMode[client] ? "On":"Off");
+	return Plugin_Handled;
+}
+
 public Action Bash_Test(int client, int args)
 {
 	if (client == 0)
@@ -1287,6 +1324,7 @@ void ShowBashSettings(int client)
 	menu.SetTitle("[BASH] - Settings");
 
 	menu.AddItem("adminmode",		(g_bAdminMode[client]) ? "[x] Admin mode":"[ ] Admin mode");
+	menu.AddItem("personalmode",		(g_bPersonalMode[client]) ? "[x] Personal logs":"[ ] Personal logs");
 	menu.AddItem("stats",			"Stats");
 
 	menu.Display(client, MENU_TIME_FOREVER);
@@ -1302,6 +1340,11 @@ public int BashSettings_Menu(Menu menu, MenuAction action, int param1, int param
 		if(StrEqual(sInfo, "adminmode"))
 		{
 			Bash_AdminMode(param1, GetClientUserId(param1));
+			ShowBashSettings(param1);
+		}
+		else if(StrEqual(sInfo, "personalmode"))
+		{
+			Bash_PersonalMode(param1, GetClientUserId(param1));
 			ShowBashSettings(param1);
 		}
 		else if(StrEqual(sInfo, "stats"))
