@@ -302,6 +302,7 @@ public void OnPluginStart()
 	RegAdminCmd("sm_bash2_test", Bash_Test, ADMFLAG_RCON, "trigger a test message so you can know if webhooks are working :)");
 	RegAdminCmd("sm_bash2_testban", Bash_TestBan, ADMFLAG_RCON, "ban a client using bash autoban function");
 
+	RegConsoleCmd("sm_bash", Bash_Settings, "Open the bash settings menu");
 	RegConsoleCmd("sm_bash2", Bash_Settings, "Open the bash settings menu");
 	RegConsoleCmd("bash2_stats", Bash_Stats, "Check a player's strafe stats");
 	RegConsoleCmd("bash2_admin", Bash_AdminMode, "Opt in/out of admin mode (Prints bash info into chat).");
