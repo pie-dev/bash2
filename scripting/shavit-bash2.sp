@@ -223,7 +223,6 @@ ConVar g_hAutobanSafeGroup;
 ConVar g_hDevBan;
 ConVar g_hIdentificalStrafeBan;
 ConVar g_hBashCmdPublic;
-Cookie g_hDefaultCookies;
 Cookie g_hEnabledCookie;
 Cookie g_hPersonalCookie;
 ConVar g_hBanIP;
@@ -289,7 +288,6 @@ public void OnPluginStart()
 
 	HookConVarChange(g_hBanLength, OnBanLengthChanged);
 
-	g_hDefaultCookies = RegClientCookie("bash2_default", "bash2 defaults", CookieAccess_Private);
 	g_hEnabledCookie = RegClientCookie("bash2_logs_enabled", "if logs are on", CookieAccess_Private);
 	g_hPersonalCookie = RegClientCookie("bash2_logs_personal", "if only your own logs are printed", CookieAccess_Private);
 
@@ -661,35 +659,31 @@ public void OnMapStart()
 	SaveOldLogs();
 }
 
+int CheckCookie(int client, Cookie cookie)
+{
+	char sCookie[8];
+
+	GetClientCookie(client, cookie, sCookie, sizeof(sCookie));
+
+	if(sCookie[0] == '\0')
+	{
+		SetClientCookie(client, cookie, "0");
+	}
+
+	return StringToInt(sCookie);
+}
+
 public void OnClientCookiesCached(int client)
 {
 	g_bAdminMode[client] = false;
 	g_bPersonalMode[client] = false;
 
-	char sCookie[8];
-	int val;
-
-	GetClientCookie(client, g_hDefaultCookies, sCookie, sizeof(sCookie));
-
-	if(sCookie[0] == '\0')
-	{
-		SetClientCookie(client, g_hEnabledCookie, "0");
-		SetClientCookie(client, g_hPersonalCookie, "0");
-		SetClientCookie(client, g_hDefaultCookies, "1");
-	}
-
-	GetClientCookie(client, g_hEnabledCookie, sCookie, sizeof(sCookie));
-	val = StringToInt(sCookie);
-
-	if(val)
+	if(CheckCookie(client, g_hEnabledCookie))
 	{
 		Bash_AdminMode(client, 0);
 	}
 
-	GetClientCookie(client, g_hPersonalCookie, sCookie, sizeof(sCookie));
-	val = StringToInt(sCookie);
-
-	if(val)
+	if(CheckCookie(client, g_hPersonalCookie))
 	{
 		Bash_PersonalMode(client, 0);
 	}
