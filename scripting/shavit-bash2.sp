@@ -1282,7 +1282,7 @@ public Action Bash_PersonalMode(int client, int args)
 	}
 	g_bPersonalMode[client] = !g_bPersonalMode[client];
 	SetClientCookie(client, g_hPersonalCookie, g_bPersonalMode[client] ? "1":"0");
-	ReplyToCommand(client, "[BASH] Filter personal logs: %s", g_bPersonalMode[client] ? "On":"Off");
+	ReplyToCommand(client, "[BASH] Show logs: %s", g_bPersonalMode[client] ? "Yours":"All");
 	return Plugin_Handled;
 }
 
@@ -1330,10 +1330,10 @@ void ShowBashSettings(int client)
 	Menu menu = new Menu(BashSettings_Menu);
 	menu.SetTitle("[BASH] - Settings");
 
-	menu.AddItem("adminmode",		(g_bAdminMode[client]) ? "[x] Admin mode":"[ ] Admin mode");
+	menu.AddItem("adminmode",		(g_bAdminMode[client]) ? "[x] Enable logs":"[ ] Enable logs");
 	if(g_bAdminMode[client])
 	{
-		menu.AddItem("personalmode",		(g_bPersonalMode[client]) ? "[x] Personal logs":"[ ] Personal logs");
+		menu.AddItem("personalmode",		(g_bPersonalMode[client]) ? "[You] Show logs":"[All] Show logs");
 	}
 	menu.AddItem("stats",			"Stats");
 
