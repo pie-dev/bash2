@@ -242,6 +242,9 @@ ConVar g_hPersistentData;
 char g_aclogfile[PLATFORM_MAX_PATH];
 char g_sPlayerIp[MAXPLAYERS + 1][16];
 
+char g_sGainLog[512];
+char g_sDevLog[512];
+
 //shavit
 
 stylestrings_t g_sStyleStrings[STYLE_LIMIT];
@@ -324,6 +327,31 @@ public void Shavit_OnChatConfigLoaded()
 	Shavit_GetChatStrings(sMessageVariable, g_csChatStrings.sVariable, sizeof(chatstrings_t::sVariable));
 	Shavit_GetChatStrings(sMessageVariable2, g_csChatStrings.sVariable2, sizeof(chatstrings_t::sVariable2));
 	Shavit_GetChatStrings(sMessageStyle, g_csChatStrings.sStyle, sizeof(chatstrings_t::sStyle));
+}
+
+bool LoadLogsConfig()
+{
+	char sPath[PLATFORM_MAX_PATH];
+	BuildPath(Path_SM, sPath, PLATFORM_MAX_PATH, "configs/bash-logs.cfg");
+
+	KeyValues kv = new KeyValues("bash-logs");
+
+	if(!kv.ImportFromFile(sPath))
+	{
+		delete kv;
+
+		return false;
+	}
+
+	do
+	{
+		kv.GetString("gain", g_sGainLog, sizeof(g_sGainLog));
+		kv.GetString("dev", g_sDevLog, sizeof(g_sDevLog));
+	}
+	while(kv.GotoNextKey());
+
+	delete kv;
+	return true;
 }
 
 public void OnBanLengthChanged(ConVar convar, const char[] oldValue, const char[] newValue)
@@ -654,6 +682,11 @@ public void OnMapStart()
 				OnClientAuthorized(iclient, "");
 			}
 		}
+	}
+
+	if(!LoadLogsConfig())
+	{
+		SetFailState("Loading logs config failed.");
 	}
 
 	SaveOldLogs();
@@ -2600,35 +2633,32 @@ void CheckForIllegalMovement(int client, float vel[3], int buttons)
 	g_iLastIllegalSidemoveCount[client] = g_iIllegalSidemoveCount[client];
 }
 
-void FormatGainLog(const char[] templateString, char[] output, int outputSize, int client, int color, float gain, char[] gainAdj, float spj, float yawwing, char[] sStyle)
+void FormatGainLog(char[] output, int outputSize, int client, int color, float gain, char[] gainAdj, float spj, float yawwing, char[] sStyle)
 {
-    char tempString[512];
     char formattedString[512];
+    char buffer[32];
 
-    strcopy(tempString, sizeof(tempString), templateString);
+    strcopy(formattedString, sizeof(formattedString), g_sGainLog);
 
-    Format(formattedString, sizeof(formattedString), "%s", g_csChatStrings.sText);
-    ReplaceString(tempString, sizeof(tempString), "{def}", formattedString, true);
+    Format(buffer, sizeof(buffer), "%s%N%s", g_csChatStrings.sVariable, client, g_csChatStrings.sText);
+    ReplaceString(formattedString, sizeof(formattedString), "{client}", buffer, true);
 
-    Format(formattedString, sizeof(formattedString), "%s%N", g_csChatStrings.sVariable, client);
-    ReplaceString(tempString, sizeof(tempString), "{client}", formattedString, true);
+    Format(buffer, sizeof(buffer), "%s%.2f%s", g_sBstatColorsHex[color], gain, g_csChatStrings.sText);
+    ReplaceString(formattedString, sizeof(formattedString), "{gain}", buffer, true);
 
-    Format(formattedString, sizeof(formattedString), "%s%.2f", g_sBstatColorsHex[color], gain);
-    ReplaceString(tempString, sizeof(tempString), "{gain}", formattedString, true);
+    Format(buffer, sizeof(buffer), "%s%s", g_csChatStrings.sText, gainAdj);
+    ReplaceString(formattedString, sizeof(formattedString), "{gainAdj}", buffer, true);
 
-    Format(formattedString, sizeof(formattedString), "%s%s", g_csChatStrings.sText, gainAdj);
-    ReplaceString(tempString, sizeof(tempString), "{gainAdj}", formattedString, true);
+    Format(buffer, sizeof(buffer), "%s%.1f%s", g_csChatStrings.sVariable, spj, g_csChatStrings.sText);
+    ReplaceString(formattedString, sizeof(formattedString), "{spj}", buffer, true);
 
-    Format(formattedString, sizeof(formattedString), "%s%.1f", g_csChatStrings.sVariable, spj);
-    ReplaceString(tempString, sizeof(tempString), "{spj}", formattedString, true);
+    Format(buffer, sizeof(buffer), "%s%.1f%s", g_csChatStrings.sVariable, yawwing, g_csChatStrings.sText);
+    ReplaceString(formattedString, sizeof(formattedString), "{yaw}", buffer, true);
 
-    Format(formattedString, sizeof(formattedString), "%s%.1f", g_csChatStrings.sVariable, yawwing);
-    ReplaceString(tempString, sizeof(tempString), "{yaw}", formattedString, true);
+    Format(buffer, sizeof(buffer), "%s%s%s", g_csChatStrings.sVariable, sStyle, g_csChatStrings.sText);
+    ReplaceString(formattedString, sizeof(formattedString), "{style}", buffer, true);
 
-    Format(formattedString, sizeof(formattedString), "%s%s", g_csChatStrings.sVariable, sStyle);
-    ReplaceString(tempString, sizeof(tempString), "{style}", formattedString, true);
-
-    strcopy(output, outputSize, tempString);
+    strcopy(output, outputSize, formattedString);
 }
 
 void ProcessGainLog(int client, float gain, float spj, float yawwing)
@@ -2660,11 +2690,10 @@ void ProcessGainLog(int client, float gain, float spj, float yawwing)
 		color = Yellow;
 	}
 
-	char templateString[128] = "{client} {text}has {gain} {text}| SPJ: {spj}";
-	char finalString[512];
+	char gainLog[512];
+	FormatGainLog(gainLog, sizeof(gainLog), client, color, gain, gainAdj, spj, yawwing, sStyle);
 
-	FormatGainLog(templateString, finalString, sizeof(finalString), client, color, gain, gainAdj, spj, yawwing, sStyle);
-	PrintToAdmins(client, finalString);
+	PrintToAdmins(client, gainLog);
 
 	char map[56];
 	GetCurrentMap(map, sizeof(map));
