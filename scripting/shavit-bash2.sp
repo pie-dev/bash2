@@ -2600,6 +2600,37 @@ void CheckForIllegalMovement(int client, float vel[3], int buttons)
 	g_iLastIllegalSidemoveCount[client] = g_iIllegalSidemoveCount[client];
 }
 
+void FormatGainLog(const char[] templateString, char[] output, int outputSize, int client, int color, float gain, char[] gainAdj, float spj, float yawwing, char[] sStyle)
+{
+    char tempString[512];
+    char formattedString[512];
+
+    strcopy(tempString, sizeof(tempString), templateString);
+
+    Format(formattedString, sizeof(formattedString), "%s", g_csChatStrings.sText);
+    ReplaceString(tempString, sizeof(tempString), "{text}", formattedString, true);
+
+    Format(formattedString, sizeof(formattedString), "%s%N", g_csChatStrings.sVariable, client);
+    ReplaceString(tempString, sizeof(tempString), "{client}", formattedString, true);
+
+    Format(formattedString, sizeof(formattedString), "%s%.2f", g_sBstatColorsHex[color], gain);
+    ReplaceString(tempString, sizeof(tempString), "{gain}", formattedString, true);
+
+    Format(formattedString, sizeof(formattedString), "%s%s", g_csChatStrings.sText, gainAdj);
+    ReplaceString(tempString, sizeof(tempString), "{gainAdj}", formattedString, true);
+
+    Format(formattedString, sizeof(formattedString), "%s%.1f", g_csChatStrings.sVariable, spj);
+    ReplaceString(tempString, sizeof(tempString), "{spj}", formattedString, true);
+
+    Format(formattedString, sizeof(formattedString), "%s%.1f", g_csChatStrings.sVariable, yawwing);
+    ReplaceString(tempString, sizeof(tempString), "{yaw}", formattedString, true);
+
+    Format(formattedString, sizeof(formattedString), "%s%s", g_csChatStrings.sVariable, sStyle);
+    ReplaceString(tempString, sizeof(tempString), "{style}", formattedString, true);
+
+    strcopy(output, outputSize, tempString);
+}
+
 void ProcessGainLog(int client, float gain, float spj, float yawwing)
 {
 	char sStyle[32];
@@ -2629,9 +2660,11 @@ void ProcessGainLog(int client, float gain, float spj, float yawwing)
 		color = Yellow;
 	}
 
-	PrintToAdmins(client, "%s%N %s%s Gains: %s%.2f% %s| SPJ: %s%.1f %s| Turnbinds: %s%.1f% %s| Style:%s %s",
-	g_csChatStrings.sVariable, client, g_csChatStrings.sText, gainAdj, g_sBstatColorsHex[color], gain, g_csChatStrings.sText, g_csChatStrings.sVariable,
-	spj, g_csChatStrings.sText, g_csChatStrings.sVariable, yawwing, g_csChatStrings.sText, g_csChatStrings.sVariable, sStyle);
+	char templateString[128] = "{client} {text}has {gain} {text}| SPJ: {spj}";
+	char finalString[512];
+
+	FormatGainLog(templateString, finalString, sizeof(finalString), client, color, gain, gainAdj, spj, yawwing, sStyle);
+	PrintToAdmins(client, finalString);
 
 	char map[56];
 	GetCurrentMap(map, sizeof(map));
