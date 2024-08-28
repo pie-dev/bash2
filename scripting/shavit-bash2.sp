@@ -2608,7 +2608,7 @@ void FormatGainLog(const char[] templateString, char[] output, int outputSize, i
     strcopy(tempString, sizeof(tempString), templateString);
 
     Format(formattedString, sizeof(formattedString), "%s", g_csChatStrings.sText);
-    ReplaceString(tempString, sizeof(tempString), "{text}", formattedString, true);
+    ReplaceString(tempString, sizeof(tempString), "{def}", formattedString, true);
 
     Format(formattedString, sizeof(formattedString), "%s%N", g_csChatStrings.sVariable, client);
     ReplaceString(tempString, sizeof(tempString), "{client}", formattedString, true);
