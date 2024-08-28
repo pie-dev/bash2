@@ -2726,6 +2726,34 @@ void ProcessAngleSnap(int client, float illegalPct, float timingPct)
 	g_csChatStrings.sWarning, client, illegalPct * 100.0, timingPct * 100.0, sStyle, g_Sensitivity[client], g_mYaw[client]);
 }
 
+void FormatDevLog(char[] output, int outputSize, int client, int color, float dev, float mean, char[] devAdjective, bool start, char[] sStyle)
+{
+    char formattedString[512];
+    char buffer[32];
+
+    strcopy(formattedString, sizeof(formattedString), g_sDevLog);
+
+    Format(buffer, sizeof(buffer), "%s%N%s", g_csChatStrings.sVariable, client, g_csChatStrings.sText);
+    ReplaceString(formattedString, sizeof(formattedString), "{client}", buffer, true);
+
+    Format(buffer, sizeof(buffer), "%s%.2f%s", g_sBstatColorsHex[color], dev, g_csChatStrings.sText);
+    ReplaceString(formattedString, sizeof(formattedString), "{dev}", buffer, true);
+
+    Format(buffer, sizeof(buffer), "%s%.2f%s", g_csChatStrings.sVariable, mean, g_csChatStrings.sText);
+    ReplaceString(formattedString, sizeof(formattedString), "{avg}", buffer, true);
+
+    Format(buffer, sizeof(buffer), "%s%s", g_csChatStrings.sText, devAdjective);
+    ReplaceString(formattedString, sizeof(formattedString), "{devAdj}", buffer, true);
+
+    Format(buffer, sizeof(buffer), "%s%s", g_csChatStrings.sText, start ? "Start":"End");
+    ReplaceString(formattedString, sizeof(formattedString), "{start}", buffer, true);
+
+    Format(buffer, sizeof(buffer), "%s%s%s", g_csChatStrings.sVariable, sStyle, g_csChatStrings.sText);
+    ReplaceString(formattedString, sizeof(formattedString), "{style}", buffer, true);
+
+    strcopy(output, outputSize, formattedString);
+}
+
 void ProcessLowDev(int client, float dev, float mean, bool start)
 {
 	char sStyle[32];
@@ -2760,11 +2788,12 @@ void ProcessLowDev(int client, float dev, float mean, bool start)
 		color = Orange;
 	}
 
-	AnticheatLog(client, alert, "%s %sDev: %.2f Avg: %.2f Style: %s", devAdjective, start ? "Start":"End", dev, mean, sStyle);
+	char devLog[512];
+	FormatDevLog(devLog, sizeof(devLog), client, color, dev, mean, devAdjective, start, sStyle);
 
-	PrintToAdmins(client, "%s%N %s%s %s Dev: %s%.2f %s| Avg: %s%.2f %s| Style: %s%s",
-	g_csChatStrings.sVariable, client, g_csChatStrings.sText, devAdjective, start ? "Start":"End", g_sBstatColorsHex[color], dev, g_csChatStrings.sText, g_csChatStrings.sVariable, mean, g_csChatStrings.sText,
-	g_csChatStrings.sVariable, sStyle);
+	PrintToAdmins(client, devLog);
+
+	AnticheatLog(client, alert, "%s %sDev: %.2f Avg: %.2f Style: %s", devAdjective, start ? "Start":"End", dev, mean, sStyle);
 
 	if(dev > g_hDevBan.FloatValue)
 	{
